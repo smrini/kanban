@@ -1,14 +1,15 @@
 // Todo: 
 /*
-    * Adding more inputs to the form
-    * Add the ability to edit the list tittle with double click
+    * Done: Adding more inputs to the form
+    * Done: Add the ability to edit the list tittle with double click
     * Done: Getting the card form outside of the list
-    * Adding the Calendar view
+    * Done: Adding the Calendar view
     * Done: cancel the action when clicking outside the form
     * Done: Adding a logo to the tab
     * Done: Adding font awesome icons
     * Done: fixing the delete button on cards
     * Done: Fixing teh Droping action
+    * Adding filters
 */
 
 // !issue

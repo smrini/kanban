@@ -27,7 +27,7 @@
             const [board, setBoard] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
-            const [currentView, setCurrentView] = useState('board'); // 'board' or 'calendar'
+            const [currentView, setCurrentView] = useState(() => { return localStorage.getItem('kanban-current-view') || 'board'; });
             const [draggedCard, setDraggedCard] = useState(null);
             const [draggedList, setDraggedList] = useState(null);
             const [dragOverList, setDragOverList] = useState(null);
@@ -39,7 +39,8 @@
 
             useEffect(() => {
                 fetchBoard();
-            }, []);
+                localStorage.setItem('kanban-current-view', currentView);
+            }, [currentView]);
 
             const fetchBoard = async () => {
                 try {
@@ -116,6 +117,10 @@
                         })
                     });
 
+                    if (!response.ok) {
+                        throw new Error('Failed to add card');
+                    }
+
                     const newCard = await response.json();
                     console.log('Received card from API:', newCard);
 
@@ -133,13 +138,15 @@
                                 : list
                         )
                     }));
+
+                    // Close the appropriate modal based on which one is open
                     setShowAddCard(null);
+
                 } catch (err) {
                     console.error('Error adding card:', err);
                     setError('Failed to add card');
                 }
             };
-
 
             const updateCard = async (cardId, title, description, dueDate, priority) => {
                 try {
@@ -537,6 +544,7 @@
                         <CalendarView
                             board={board}
                             onEditCard={(card) => setEditingCard(card)}
+                            onAddCard={addCard}
                         />
                     )}
 
@@ -566,9 +574,13 @@
             );
         }
 
-        function CalendarView({ board, onEditCard }) {
+        function CalendarView({ board, onEditCard, onAddCard }) {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedDate, setSelectedDate] = useState(null);
+            const [showGoToDate, setShowGoToDate] = useState(false);
+            const [goToDateValue, setGoToDateValue] = useState('');
+            const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+            const [selectedDateForTask, setSelectedDateForTask] = useState(null);
 
             // Get all cards with due dates
             const getAllCards = () => {
@@ -631,6 +643,34 @@
                 });
             };
 
+            const goToDate = (dateString) => {
+                if (!dateString) return;
+
+                const date = new Date(dateString + 'T00:00:00');
+                if (isNaN(date.getTime())) return;
+
+                setCurrentDate(date);
+                setGoToDateValue('');
+                setShowGoToDate(false);
+            };
+
+            const goToToday = () => {
+                setCurrentDate(new Date());
+            };
+
+            const handleDateClick = (date) => {
+                setSelectedDate(date);
+                setSelectedDateForTask(date);
+                setShowAddTaskModal(true);
+            };
+
+            const formatDateForInput = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
             const isToday = (date) => {
                 const today = new Date();
                 return date.getFullYear() === today.getFullYear() &&
@@ -655,21 +695,91 @@
             return (
                 <div className="calendar-view">
                     <div className="calendar-header">
-                        <button
-                            className="calendar-nav-button"
-                            onClick={() => navigateMonth(-1)}
-                        >
-                            <i className="fas fa-chevron-left"></i>
-                        </button>
-                        <h2 className="calendar-title">
-                            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-                        </h2>
-                        <button
-                            className="calendar-nav-button"
-                            onClick={() => navigateMonth(1)}
-                        >
-                            <i className="fas fa-chevron-right"></i>
-                        </button>
+                        <div className="calendar-nav-left">
+                            <button
+                                className="calendar-nav-button"
+                                onClick={() => navigateMonth(-1)}
+                            >
+                                <i className="fas fa-chevron-left"></i>
+                            </button>
+                            <h2 className="calendar-title">
+                                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                            </h2>
+                            <button
+                                className="calendar-nav-button"
+                                onClick={() => navigateMonth(1)}
+                            >
+                                <i className="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <div className="calendar-controls">
+                            <button
+                                className="calendar-control-button"
+                                onClick={goToToday}
+                                title="Go to Today"
+                            >
+                                <i className="fas fa-calendar-day"></i>
+                                Today
+                            </button>
+
+                            <div className="go-to-date-container">
+                                {showGoToDate ? (
+                                    <div className="go-to-date-input">
+                                        <input
+                                            type="date"
+                                            value={goToDateValue}
+                                            onChange={(e) => setGoToDateValue(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    goToDate(goToDateValue);
+                                                } else if (e.key === 'Escape') {
+                                                    setGoToDateValue('');
+                                                    setShowGoToDate(false);
+                                                }
+                                            }}
+                                            autoFocus
+                                        />
+                                        <button
+                                            className="go-button"
+                                            onClick={() => goToDate(goToDateValue)}
+                                        >
+                                            Go
+                                        </button>
+                                        <button
+                                            className="cancel-go-button"
+                                            onClick={() => {
+                                                setGoToDateValue('');
+                                                setShowGoToDate(false);
+                                            }}
+                                        >
+                                            <i className="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className="calendar-control-button"
+                                        onClick={() => setShowGoToDate(true)}
+                                        title="Go to Specific Date"
+                                    >
+                                        <i className="fas fa-search"></i>
+                                        Go to Date
+                                    </button>
+                                )}
+                            </div>
+
+                            <button
+                                className="calendar-control-button add-task-button"
+                                onClick={() => {
+                                    setSelectedDateForTask(new Date());
+                                    setShowAddTaskModal(true);
+                                }}
+                                title="Add New Task"
+                            >
+                                <i className="fas fa-plus"></i>
+                                Add Task
+                            </button>
+                        </div>
                     </div>
 
                     <div className="calendar-grid">
@@ -683,9 +793,10 @@
                             <div
                                 key={index}
                                 className={`calendar-day ${dayData
-                                    ? `${isToday(dayData.date) ? 'today' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''}`
+                                    ? `${isToday(dayData.date) ? 'today' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''} clickable`
                                     : 'empty'
                                     }`}
+                                onClick={() => dayData && handleDateClick(dayData.date)}
                             >
                                 {dayData && (
                                     <>
@@ -696,9 +807,12 @@
                                             {dayData.cards.map(card => (
                                                 <div
                                                     key={card.id}
-                                                    className={`calendar-card priority-${card.priority || 'medium'} ${isOverdue(new Date(dayData.date)) ? 'overdue' : ''
+                                                    className={`calendar-card priority-${card.priority || 'medium'} ${isOverdue(dayData.date) ? 'overdue' : ''
                                                         }`}
-                                                    onClick={() => onEditCard(card)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onEditCard(card);
+                                                    }}
                                                     title={`${card.title} (${card.listName})`}
                                                 >
                                                     <div className="calendar-card-title">{card.title}</div>
@@ -706,11 +820,35 @@
                                                 </div>
                                             ))}
                                         </div>
+                                        <div className="calendar-day-add">
+                                            <button
+                                                className="calendar-add-button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDateClick(dayData.date);
+                                                }}
+                                                title="Add task for this date"
+                                            >
+                                                <i className="fas fa-plus"></i>
+                                            </button>
+                                        </div>
                                     </>
                                 )}
                             </div>
                         ))}
                     </div>
+
+                    {showAddTaskModal && (
+                        <CalendarAddTaskModal
+                            selectedDate={selectedDateForTask}
+                            lists={board.lists}
+                            onSave={onAddCard}
+                            onClose={() => {
+                                setShowAddTaskModal(false);
+                                setSelectedDateForTask(null);
+                            }}
+                        />
+                    )}
                 </div>
             );
         }
@@ -957,6 +1095,120 @@
                                 <button type="button" className="delete-button" onClick={handleDelete}>
                                     <i className="fas fa-trash"></i>
                                     Delete
+                                </button>
+                                <button type="button" className="cancel-button" onClick={onClose}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function CalendarAddTaskModal({ selectedDate, lists, onSave, onClose }) {
+            const [title, setTitle] = useState('');
+            const [description, setDescription] = useState('');
+            const [selectedList, setSelectedList] = useState(lists[0]?.id || '');
+            const [priority, setPriority] = useState('medium');
+
+            const formatDateForDisplay = (date) => {
+                return date.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            };
+
+            const formatDateForInput = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (title.trim() && selectedList) {
+                    const dueDate = formatDateForInput(selectedDate);
+
+                    // Call onSave and wait for it to complete
+                    await onSave(parseInt(selectedList), title.trim(), description.trim(), dueDate, priority);
+
+                    // Close the modal after successful save
+                    onClose();
+                }
+            };
+
+            const handleOverlayClick = (e) => {
+                if (e.target === e.currentTarget) {
+                    onClose();
+                }
+            };
+
+            return (
+                <div className="modal-overlay" onClick={handleOverlayClick}>
+                    <div className="modal-content wide">
+                        <h3>Add Task for {formatDateForDisplay(selectedDate)}</h3>
+                        <form className="modal-form" onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label>List:</label>
+                                <select
+                                    value={selectedList}
+                                    onChange={(e) => setSelectedList(e.target.value)}
+                                    className="modal-select"
+                                    required
+                                >
+                                    {lists.map(list => (
+                                        <option key={list.id} value={list.id}>
+                                            {list.title}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Task Title:</label>
+                                <input
+                                    type="text"
+                                    placeholder="Enter task title"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    autoFocus
+                                    className="modal-input"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Description:</label>
+                                <textarea
+                                    placeholder="Task description (optional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Priority:</label>
+                                <select
+                                    value={priority}
+                                    onChange={(e) => setPriority(e.target.value)}
+                                    className="modal-select"
+                                >
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+
+                            <div className="modal-buttons">
+                                <button type="submit" className="save-button">
+                                    <i className="fas fa-plus"></i>
+                                    Add Task
                                 </button>
                                 <button type="button" className="cancel-button" onClick={onClose}>
                                     Cancel
