@@ -44,6 +44,7 @@
     --calendar-hover: #4a5568;
     --calendar-clickable-hover: #2c5282;
     --modal-overlay: rgba(0, 0, 0, 0.7);
+    --card-text-primary: #333;
 }
 
 * {
@@ -306,7 +307,7 @@ button {
 .card-title {
 	font-weight: bold;
 	margin-bottom: 8px;
-	color: var(--text-primary);
+	color: var(--card-text-primary);
 	transition: color 0.3s ease;
 }
 
