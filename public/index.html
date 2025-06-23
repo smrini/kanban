@@ -29,6 +29,7 @@
             const [error, setError] = useState(null);
             const [currentView, setCurrentView] = useState(() => { return localStorage.getItem('kanban-current-view') || 'board'; });
             const [theme, setTheme] = useState(() => { return localStorage.getItem('kanban-theme') || 'light'; });
+            const [showFilters, setShowFilters] = useState(() => { return localStorage.getItem('kanban-show-filters') !== 'false'; });
             const [draggedCard, setDraggedCard] = useState(null);
             const [draggedList, setDraggedList] = useState(null);
             const [dragOverList, setDragOverList] = useState(null);
@@ -37,6 +38,11 @@
             const [showAddCard, setShowAddCard] = useState(null);
             const [editingCard, setEditingCard] = useState(null);
             const [editingList, setEditingList] = useState(null);
+            const [filters, setFilters] = useState({
+                search: '',
+                priority: 'all',
+                dueDate: 'all'
+            });
 
             useEffect(() => {
                 fetchBoard();
@@ -49,8 +55,17 @@
                 document.body.setAttribute('data-theme', theme);
             }, [theme]);
 
+            // Add filter visibility effect
+            useEffect(() => {
+                localStorage.setItem('kanban-show-filters', showFilters);
+            }, [showFilters]);
+
             const toggleTheme = () => {
                 setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+            };
+
+            const toggleFilters = () => {
+                setShowFilters(prev => !prev);
             };
 
             const fetchBoard = async () => {
@@ -427,6 +442,74 @@
                 }
             };
 
+            // Filter function for cards
+            const filterCards = (cards) => {
+                return cards.filter(card => {
+                    // Search filter
+                    if (filters.search && !card.title.toLowerCase().includes(filters.search.toLowerCase()) &&
+                        !card.description?.toLowerCase().includes(filters.search.toLowerCase())) {
+                        return false;
+                    }
+
+                    // Priority filter
+                    if (filters.priority !== 'all' && (card.priority || 'medium') !== filters.priority) {
+                        return false;
+                    }
+
+                    // Due date filter
+                    if (filters.dueDate !== 'all') {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (filters.dueDate === 'overdue') {
+                            if (!card.due_date) return false;
+                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            return dueDate < today;
+                        } else if (filters.dueDate === 'today') {
+                            if (!card.due_date) return false;
+                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            return dueDate.getTime() === today.getTime();
+                        } else if (filters.dueDate === 'upcoming') {
+                            if (!card.due_date) return false;
+                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+                            return dueDate > today && dueDate <= weekFromNow;
+                        } else if (filters.dueDate === 'no-date') {
+                            return !card.due_date;
+                        }
+                    }
+
+                    return true;
+                });
+            };
+
+            // Filter lists for board view
+            const filterLists = (lists) => {
+                return lists.map(list => ({
+                    ...list,
+                    cards: filterCards(list.cards)
+                }));
+            };
+
+            const clearFilters = () => {
+                setFilters({
+                    search: '',
+                    priority: 'all',
+                    dueDate: 'all'
+                });
+            };
+
+            const hasActiveFilters = () => {
+                return filters.search !== '' || filters.priority !== 'all' || filters.dueDate !== 'all';
+            };
+
+            // Get total filtered cards count
+            const getFilteredCardsCount = () => {
+                if (!board) return 0;
+                const allCards = board.lists.flatMap(list => list.cards);
+                return filterCards(allCards).length;
+            };
+
             if (loading) return <div className="loading">Loading your Kanban board...</div>;
             if (error) return <div className="error">{error}</div>;
             if (!board) return <div className="loading">No board found</div>;
@@ -443,6 +526,17 @@
                             Add List
                         </button>
                         <div className="action-bar-right">
+                            <button
+                                className={`filter-toggle-button ${showFilters ? 'active' : ''}`}
+                                onClick={toggleFilters}
+                            >
+                                <i className={`fas ${showFilters ? 'fa-eye-slash' : 'fa-filter'}`}></i>
+                                {hasActiveFilters() && (
+                                    <span className="filtered-count">
+                                        <i className="fas fa-circle"></i>
+                                    </span>
+                                )}
+                            </button>
                             <div className="views">
                                 <button
                                     className={currentView === 'board' ? 'active' : ''}
@@ -467,13 +561,24 @@
                         </div>
                     </div>
 
+                    {showFilters && (
+                        <FilterBar
+                            filters={filters}
+                            onFiltersChange={setFilters}
+                            onClearFilters={clearFilters}
+                            hasActiveFilters={hasActiveFilters()}
+                            filteredCount={getFilteredCardsCount()}
+                            totalCount={board.lists.flatMap(list => list.cards).length}
+                        />
+                    )}
+
                     {currentView === 'board' ? (
                         <div
                             className="board"
                             onDragOver={handleBoardDragOver}
                             onDrop={handleBoardDrop}
                         >
-                            {board.lists.map(list => (
+                            {filterLists(board.lists).map(list => (
                                 <div
                                     key={list.id}
                                     className={`list ${dragOverList === list.id ? 'drag-over' : ''} ${draggedList && draggedList.id === list.id ? 'dragging' : ''}`}
@@ -563,6 +668,7 @@
                     ) : (
                         <CalendarView
                             board={board}
+                            filters={filters}
                             onEditCard={(card) => setEditingCard(card)}
                             onAddCard={addCard}
                         />
@@ -594,7 +700,90 @@
             );
         }
 
-        function CalendarView({ board, onEditCard, onAddCard }) {
+        function FilterBar({ filters, onFiltersChange, onClearFilters, hasActiveFilters, filteredCount, totalCount }) {
+            const updateFilter = (key, value) => {
+                onFiltersChange(prev => ({
+                    ...prev,
+                    [key]: value
+                }));
+            };
+
+            return (
+                <div className="filter-bar">
+                    <div className="filter-group">
+                        <div className="filter-item">
+                            <i className="fas fa-search"></i>
+                            <input
+                                type="text"
+                                placeholder="Search cards..."
+                                value={filters.search}
+                                onChange={(e) => updateFilter('search', e.target.value)}
+                                className="filter-input"
+                            />
+                        </div>
+
+                        <div className="filter-item">
+                            <i className="fas fa-flag"></i>
+                            <select
+                                value={filters.priority}
+                                onChange={(e) => updateFilter('priority', e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">All Priorities</option>
+                                <option value="low">Low Priority</option>
+                                <option value="medium">Medium Priority</option>
+                                <option value="high">High Priority</option>
+                                <option value="urgent">Urgent Priority</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-item">
+                            <i className="fas fa-calendar"></i>
+                            <select
+                                value={filters.dueDate}
+                                onChange={(e) => updateFilter('dueDate', e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">All Due Dates</option>
+                                <option value="overdue">Overdue</option>
+                                <option value="today">Due Today</option>
+                                <option value="upcoming">Due This Week</option>
+                                <option value="no-date">No Due Date</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-status">
+                            {hasActiveFilters && (
+                                <div className="filtered-count">
+                                    <i className="fas fa-filter"></i>
+                                    {filteredCount} of {totalCount} cards
+                                </div>
+                            )}
+
+                            {hasActiveFilters && (
+                                <div className="filter-indicator">
+                                    <i className="fas fa-check-circle"></i>
+                                    Filters Active
+                                </div>
+                            )}
+                        </div>
+
+                        {hasActiveFilters && (
+                            <button
+                                className="clear-filters-button"
+                                onClick={onClearFilters}
+                                title="Clear all filters"
+                            >
+                                <i className="fas fa-times"></i>
+                                Clear Filters
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function CalendarView({ board, filters, onEditCard, onAddCard }) {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedDate, setSelectedDate] = useState(null);
             const [showGoToDate, setShowGoToDate] = useState(false);
@@ -602,19 +791,57 @@
             const [showAddTaskModal, setShowAddTaskModal] = useState(false);
             const [selectedDateForTask, setSelectedDateForTask] = useState(null);
 
-            // Get all cards with due dates
+            // Get all cards with due dates and apply filters
             const getAllCards = () => {
-                return board.lists.flatMap(list =>
+                const allCards = board.lists.flatMap(list =>
                     list.cards.map(card => ({
                         ...card,
                         listName: list.title
                     }))
                 );
+
+                // Apply filters
+                return allCards.filter(card => {
+                    // Search filter
+                    if (filters.search && !card.title.toLowerCase().includes(filters.search.toLowerCase()) &&
+                        !card.description?.toLowerCase().includes(filters.search.toLowerCase())) {
+                        return false;
+                    }
+
+                    // Priority filter
+                    if (filters.priority !== 'all' && (card.priority || 'medium') !== filters.priority) {
+                        return false;
+                    }
+
+                    // Due date filter for calendar view
+                    if (filters.dueDate !== 'all') {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (filters.dueDate === 'overdue') {
+                            if (!card.due_date) return false;
+                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            return dueDate < today;
+                        } else if (filters.dueDate === 'today') {
+                            if (!card.due_date) return false;
+                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            return dueDate.getTime() === today.getTime();
+                        } else if (filters.dueDate === 'upcoming') {
+                            if (!card.due_date) return false;
+                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+                            return dueDate > today && dueDate <= weekFromNow;
+                        } else if (filters.dueDate === 'no-date') {
+                            return !card.due_date;
+                        }
+                    }
+
+                    return true;
+                });
             };
 
-            // Get cards for a specific date - Fixed date comparison
+            // Get cards for a specific date - now uses filtered cards
             const getCardsForDate = (date) => {
-                // Format the date as YYYY-MM-DD in local timezone
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
@@ -622,7 +849,6 @@
 
                 return getAllCards().filter(card => {
                     if (!card.due_date) return false;
-                    // Extract just the date part from the stored due_date
                     const cardDateStr = card.due_date.split('T')[0];
                     return cardDateStr === dateStr;
                 });
@@ -712,6 +938,7 @@
 
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+            // Modified calendar rendering to show filter status
             return (
                 <div className="calendar-view">
                     <div className="calendar-header">
@@ -724,6 +951,12 @@
                             </button>
                             <h2 className="calendar-title">
                                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                                {(filters.search || filters.priority !== 'all' || filters.dueDate !== 'all') && (
+                                    <span className="filter-indicator">
+                                        <i className="fas fa-filter"></i>
+                                        Filtered
+                                    </span>
+                                )}
                             </h2>
                             <button
                                 className="calendar-nav-button"

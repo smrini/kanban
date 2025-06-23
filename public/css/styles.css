@@ -1,50 +1,50 @@
 /* Light theme (default) */
 :root {
-    --bg-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --bg-secondary: rgba(255, 255, 255, 0.95);
-    --bg-tertiary: #f8f9fa;
-    --bg-card: white;
-    --text-primary: #333;
-    --text-secondary: #666;
-    --text-muted: #999;
-    --border-color: #f0f0f0;
-    --border-input: #ddd;
-    --shadow-light: rgba(0, 0, 0, 0.1);
-    --shadow-medium: rgba(0, 0, 0, 0.15);
-    --calendar-grid-bg: #e0e0e0;
-    --calendar-grid-border: #d0d0d0; /* Add this line */
-    --calendar-empty: #f5f5f5;
-    --calendar-today: #e3f2fd;
-    --calendar-today-border: #2196f3;
-    --calendar-has-cards: #fff8e1;
-    --calendar-hover: #f8f9fa;
-    --calendar-clickable-hover: #f0f8ff;
-    --modal-overlay: rgba(0, 0, 0, 0.5);
+	--bg-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	--bg-secondary: rgba(255, 255, 255, 0.95);
+	--bg-tertiary: #f8f9fa;
+	--bg-card: white;
+	--text-primary: #333;
+	--text-secondary: #666;
+	--text-muted: #999;
+	--border-color: #f0f0f0;
+	--border-input: #ddd;
+	--shadow-light: rgba(0, 0, 0, 0.1);
+	--shadow-medium: rgba(0, 0, 0, 0.15);
+	--calendar-grid-bg: #e0e0e0;
+	--calendar-grid-border: #d0d0d0; /* Add this line */
+	--calendar-empty: #f5f5f5;
+	--calendar-today: #e3f2fd;
+	--calendar-today-border: #2196f3;
+	--calendar-has-cards: #fff8e1;
+	--calendar-hover: #f8f9fa;
+	--calendar-clickable-hover: #f0f8ff;
+	--modal-overlay: rgba(0, 0, 0, 0.5);
 }
 
 /* Dark theme */
 [data-theme="dark"] {
-    --bg-primary: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
-    --bg-secondary: rgba(45, 55, 72, 0.95);
-    --bg-tertiary: #2d3748;
-    --bg-card: #4a5568;
-    --text-primary: #e2e8f0;
-    --text-secondary: #cbd5e0;
-    --text-muted: #a0aec0;
-    --border-color: #4a5568;
-    --border-input: #718096;
-    --shadow-light: rgba(0, 0, 0, 0.3);
-    --shadow-medium: rgba(0, 0, 0, 0.4);
-    --calendar-grid-bg: #2d3748;
-    --calendar-grid-border: #1a202c; /* Add this line */
-    --calendar-empty: #2d3748;
-    --calendar-today: #2c5282;
-    --calendar-today-border: #3182ce;
-    --calendar-has-cards: #744210;
-    --calendar-hover: #4a5568;
-    --calendar-clickable-hover: #2c5282;
-    --modal-overlay: rgba(0, 0, 0, 0.7);
-    --card-text-primary: #333;
+	--bg-primary: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+	--bg-secondary: rgba(45, 55, 72, 0.95);
+	--bg-tertiary: #2d3748;
+	--bg-card: #4a5568;
+	--text-primary: #e2e8f0;
+	--text-secondary: #cbd5e0;
+	--text-muted: #a0aec0;
+	--border-color: #4a5568;
+	--border-input: #718096;
+	--shadow-light: rgba(0, 0, 0, 0.3);
+	--shadow-medium: rgba(0, 0, 0, 0.4);
+	--calendar-grid-bg: #2d3748;
+	--calendar-grid-border: #1a202c; /* Add this line */
+	--calendar-empty: #2d3748;
+	--calendar-today: #2c5282;
+	--calendar-today-border: #3182ce;
+	--calendar-has-cards: #744210;
+	--calendar-hover: #4a5568;
+	--calendar-clickable-hover: #2c5282;
+	--modal-overlay: rgba(0, 0, 0, 0.7);
+	--card-text-primary: #333;
 }
 
 * {
@@ -915,182 +915,361 @@ button {
 	transition: color 0.3s ease;
 }
 
-/* Responsive Design */
+/* Enhanced Filter Bar Styles */
+.filter-bar {
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 0 20px 20px 20px;
+    box-shadow: 0 4px 6px var(--shadow-light);
+    transition: all 0.3s ease;
+    border: 1px solid var(--border-color);
+}
+
+.filter-bar.hidden {
+    display: none;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 16px;
+    transition: all 0.3s ease;
+    min-height: 48px;
+}
+
+.filter-item:hover {
+    border-color: #667eea;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px var(--shadow-light);
+}
+
+.filter-item:focus-within {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.filter-item i {
+    color: #667eea;
+    font-size: 16px;
+    width: 16px;
+    margin: 0;
+    padding: 0;
+}
+
+.filter-input {
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    min-width: 200px;
+    outline: none;
+    font-family: inherit;
+}
+
+.filter-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.filter-select {
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    min-width: 150px;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.filter-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    padding: 8px;
+}
+
+.clear-filters-button {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
+}
+
+.clear-filters-button:hover {
+    background: linear-gradient(135deg, #ff5252, #e53935);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(255, 107, 107, 0.4);
+}
+
+.clear-filters-button:active {
+    transform: translateY(0);
+}
+
+.clear-filters-button i {
+    font-size: 12px;
+    color: white;
+}
+
+/* Filter status indicators */
+.filter-status {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: auto;
+    padding-left: 20px;
+    border-left: 2px solid var(--border-color);
+}
+
+.filtered-count {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.filtered-count i {
+    font-size: 10px;
+    color: white;
+}
+
+.filter-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #667eea;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(102, 126, 234, 0.1);
+    padding: 6px 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.filter-indicator i {
+    font-size: 11px;
+    color: #667eea;
+}
+
+/* Toggle filter button in action bar */
+.filter-toggle-button {
+    background: #17a2b8;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.filter-toggle-button:hover {
+    background: #138496;
+    transform: translateY(-1px);
+}
+
+.filter-toggle-button.active {
+    background: #28a745;
+}
+
+.filter-toggle-button.active:hover {
+    background: #218838;
+}
+
+/* Responsive filter bar */
+@media (max-width: 1024px) {
+    .filter-group {
+        gap: 15px;
+    }
+    
+    .filter-item {
+        padding: 10px 14px;
+    }
+    
+    .filter-input {
+        min-width: 180px;
+    }
+    
+    .filter-select {
+        min-width: 130px;
+    }
+}
+
 @media (max-width: 768px) {
-	.app {
-		padding: 10px;
-	}
+    .filter-bar {
+        margin: 0 10px 15px 10px;
+        padding: 15px;
+    }
+    
+    .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
 
-	.action-bar {
-		flex-direction: column;
-		gap: 10px;
-	}
+    .filter-item {
+        width: 100%;
+        padding: 12px 16px;
+    }
 
-	.action-bar-right {
-		justify-content: center;
-	}
-
-	.board {
-		gap: 10px;
-		padding: 10px 0;
-	}
-
-	.list {
-		min-width: 280px;
-		max-width: 280px;
-	}
-
-	.calendar-view {
-		margin: 10px;
-		padding: 15px;
-	}
-
-	.calendar-header {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 10px;
-	}
-
-	.calendar-nav-left {
-		justify-content: center;
-	}
-
-	.calendar-controls {
-		justify-content: center;
-	}
-
-	.calendar-control-button {
-		padding: 6px 10px;
-		font-size: 12px;
-	}
-
-	.go-to-date-input input {
-		width: 120px;
-	}
-
-	.calendar-day {
-		min-height: 80px;
-		padding: 5px;
-	}
-
-	.calendar-day-header {
-		padding: 10px 5px;
-		font-size: 12px;
-	}
-
-	.calendar-card {
-		font-size: 10px;
-		padding: 3px 4px;
-	}
-
-	.calendar-title {
-		font-size: 20px;
-	}
-
-	.calendar-add-button {
-		width: 16px;
-		height: 16px;
-		font-size: 8px;
-	}
-
-	.modal-content {
-		padding: 20px;
-		margin: 20px;
-	}
-
-	.form-row {
-		flex-direction: column;
-	}
-
-	.modal-buttons {
-		flex-direction: column;
-	}
-
-	.modal-buttons button {
-		width: 100%;
-	}
+    .filter-input,
+    .filter-select {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .filter-status {
+        margin-left: 0;
+        padding-left: 0;
+        border-left: none;
+        border-top: 2px solid var(--border-color);
+        padding-top: 15px;
+        justify-content: space-between;
+    }
 }
 
-@media (max-width: 480px) {
-	.calendar-controls {
-		flex-direction: column;
-		width: 100%;
-	}
-
-	.calendar-control-button {
-		width: 100%;
-		justify-content: center;
-	}
-
-	.go-to-date-input {
-		width: 100%;
-		justify-content: center;
-	}
+/* Dark theme filter styles */
+[data-theme="dark"] .filter-bar {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
 }
 
+[data-theme="dark"] .filter-item {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .filter-item:hover {
+    border-color: #667eea;
+}
+
+[data-theme="dark"] .filter-item:focus-within {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+[data-theme="dark"] .filter-input,
+[data-theme="dark"] .filter-select {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .filter-input::placeholder {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .filter-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .filter-status {
+    border-left-color: var(--border-color);
+}
+
+[data-theme="dark"] .filter-indicator {
+    background: rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.3);
+}
+
+/* Enhanced calendar with filters */
+.calendar-title {
+	display: flex;
+	align-items: center;
+}
+
+/* Existing styles remain unchanged */
 
 /* Light theme placeholders (default) */
 ::placeholder {
-    color: #6e6e6e;
-    opacity: 1;
+	color: #6e6e6e;
+	opacity: 1;
 }
 
 ::-webkit-input-placeholder {
-    color: #6e6e6e;
-    opacity: 1;
+	color: #6e6e6e;
+	opacity: 1;
 }
 
 ::-moz-placeholder {
-    color: #6e6e6e;
-    opacity: 1;
+	color: #6e6e6e;
+	opacity: 1;
 }
 
 :-ms-input-placeholder {
-    color: #6e6e6e;
-    opacity: 1;
+	color: #6e6e6e;
+	opacity: 1;
 }
 
 /* Dark theme placeholders */
 [data-theme="dark"] ::placeholder {
-    color: #cfdae7;
-    opacity: 1;
+	color: #cfdae7;
+	opacity: 1;
 }
 
 [data-theme="dark"] ::-webkit-input-placeholder {
-    color: #cfdae7;
-    opacity: 1;
+	color: #cfdae7;
+	opacity: 1;
 }
 
 [data-theme="dark"] ::-moz-placeholder {
-    color: #cfdae7;
-    opacity: 1;
+	color: #cfdae7;
+	opacity: 1;
 }
 
 [data-theme="dark"] :-ms-input-placeholder {
-    color: #cfdae7;
-    opacity: 1;
+	color: #cfdae7;
+	opacity: 1;
 }
 
 .modal-input::placeholder,
 .modal-textarea::placeholder,
 .list-title-input::placeholder,
 .go-to-date-input input::placeholder {
-    color: var(--text-muted);
-    opacity: 0.8;
-    transition: color 0.3s ease;
+	color: var(--text-muted);
+	opacity: 0.8;
+	transition: color 0.3s ease;
 }
 
 [data-theme="dark"] .modal-input::placeholder,
 [data-theme="dark"] .modal-textarea::placeholder,
 [data-theme="dark"] .list-title-input::placeholder,
 [data-theme="dark"] .go-to-date-input input::placeholder {
-    color: #cfdae7;
-    opacity: 0.9;
+	color: #cfdae7;
+	opacity: 0.9;
 }
 
 /* Focus state for placeholders */
 .modal-input:focus::placeholder,
 .modal-textarea:focus::placeholder {
-    opacity: 0.5;
-    transition: opacity 0.2s ease;
+	opacity: 0.5;
+	transition: opacity 0.2s ease;
 }
