@@ -9,7 +9,10 @@
     * Done: Adding font awesome icons
     * Done: fixing the delete button on cards
     * Done: Fixing teh Droping action
+    * Done: Adding Dark/Light mode
     * Adding filters
+    * Dragable cards on Calendar view
+
 */
 
 // !issue

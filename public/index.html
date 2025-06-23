@@ -28,6 +28,7 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [currentView, setCurrentView] = useState(() => { return localStorage.getItem('kanban-current-view') || 'board'; });
+            const [theme, setTheme] = useState(() => { return localStorage.getItem('kanban-theme') || 'light'; });
             const [draggedCard, setDraggedCard] = useState(null);
             const [draggedList, setDraggedList] = useState(null);
             const [dragOverList, setDragOverList] = useState(null);
@@ -41,6 +42,16 @@
                 fetchBoard();
                 localStorage.setItem('kanban-current-view', currentView);
             }, [currentView]);
+
+            // Add theme effect
+            useEffect(() => {
+                localStorage.setItem('kanban-theme', theme);
+                document.body.setAttribute('data-theme', theme);
+            }, [theme]);
+
+            const toggleTheme = () => {
+                setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+            };
 
             const fetchBoard = async () => {
                 try {
@@ -431,18 +442,27 @@
                             <i className="fas fa-plus"></i>
                             Add List
                         </button>
-                        <div className="views">
+                        <div className="action-bar-right">
+                            <div className="views">
+                                <button
+                                    className={currentView === 'board' ? 'active' : ''}
+                                    onClick={() => setCurrentView('board')}
+                                >
+                                    <i className="fa-solid fa-chart-simple fa-flip-both"></i>
+                                </button>
+                                <button
+                                    className={currentView === 'calendar' ? 'active' : ''}
+                                    onClick={() => setCurrentView('calendar')}
+                                >
+                                    <i className="fas fa-calendar"></i>
+                                </button>
+                            </div>
                             <button
-                                className={currentView === 'board' ? 'active' : ''}
-                                onClick={() => setCurrentView('board')}
+                                className="theme-toggle-button"
+                                onClick={toggleTheme}
+                                title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
                             >
-                                <i class="fa-solid fa-chart-simple fa-flip-both"></i>
-                            </button>
-                            <button
-                                className={currentView === 'calendar' ? 'active' : ''}
-                                onClick={() => setCurrentView('calendar')}
-                            >
-                                <i className="fas fa-calendar"></i>
+                                <i className={`fas ${theme === 'light' ? 'fa-moon' : 'fa-sun'}`}></i>
                             </button>
                         </div>
                     </div>
