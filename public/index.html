@@ -28,6 +28,7 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [draggedCard, setDraggedCard] = useState(null);
+            const [draggedList, setDraggedList] = useState(null);
             const [dragOverList, setDragOverList] = useState(null);
             const [dragOverCard, setDragOverCard] = useState(null);
             const [showAddList, setShowAddList] = useState(false);
@@ -98,6 +99,8 @@
 
             const addCard = async (listId, title, description, dueDate, priority) => {
                 try {
+                    console.log('Adding card with priority:', priority); // Debug log
+
                     const response = await fetch(`${API_BASE}/cards`, {
                         method: 'POST',
                         headers: {
@@ -111,21 +114,32 @@
                             priority
                         })
                     });
+
                     const newCard = await response.json();
+                    console.log('Received card from API:', newCard); // Debug log
+
+                    // Ensure the card has the priority field
+                    const cardWithPriority = {
+                        ...newCard,
+                        priority: newCard.priority || priority, // Fallback to the sent priority
+                        due_date: newCard.due_date || (dueDate || null)
+                    };
 
                     setBoard(prev => ({
                         ...prev,
                         lists: prev.lists.map(list =>
                             list.id === listId
-                                ? { ...list, cards: [...list.cards, newCard] }
+                                ? { ...list, cards: [...list.cards, cardWithPriority] }
                                 : list
                         )
                     }));
                     setShowAddCard(null);
                 } catch (err) {
+                    console.error('Error adding card:', err); // Debug log
                     setError('Failed to add card');
                 }
             };
+
 
             const updateCard = async (cardId, title, description, dueDate, priority) => {
                 try {
@@ -202,18 +216,44 @@
             const handleDragEnd = (e) => {
                 e.target.classList.remove('dragging');
                 setDraggedCard(null);
+                setDraggedList(null);
                 setDragOverList(null);
                 setDragOverCard(null);
             };
 
+            // List drag handlers
+            const handleListDragStart = (e, list) => {
+                setDraggedList(list);
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            };
+
+
+            const handleListDragEnd = (e) => {
+                e.target.classList.remove('dragging');
+                setDraggedList(null);
+                setDragOverList(null);
+            };
+
             const handleListDragOver = (e, listId) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                setDragOverList(listId);
+                e.stopPropagation();
+
+                // If we're dragging a list over another list
+                if (draggedList && draggedList.id !== listId) {
+                    e.dataTransfer.dropEffect = 'move';
+                    setDragOverList(listId);
+                    return;
+                }
+
+                // If we're dragging a card
+                if (draggedCard) {
+                    e.dataTransfer.dropEffect = 'move';
+                    setDragOverList(listId);
+                }
             };
 
             const handleListDragLeave = (e) => {
-                // Only clear if we're leaving the list entirely
                 if (!e.currentTarget.contains(e.relatedTarget)) {
                     setDragOverList(null);
                 }
@@ -234,12 +274,87 @@
 
             const handleListDrop = async (e, targetListId) => {
                 e.preventDefault();
+                e.stopPropagation();
+
+                // Handle list reordering - simple replacement behavior
+                if (draggedList && draggedList.id !== targetListId) {
+                    await reorderList(draggedList.id, targetListId);
+                    setDragOverList(null);
+                    return;
+                }
+
+                // Handle card movement
+                if (draggedCard && draggedCard.list_id !== targetListId) {
+                    await moveCard(draggedCard.id, targetListId, 0);
+                }
+
                 setDragOverList(null);
                 setDragOverCard(null);
+            };
 
-                if (!draggedCard || draggedCard.list_id === targetListId) return;
+            // Board-level drop handler for dropping at the end
+            const handleBoardDragOver = (e) => {
+                if (draggedList) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            };
 
-                await moveCard(draggedCard.id, targetListId, 0);
+            const handleBoardDrop = (e) => {
+                e.preventDefault();
+                if (draggedList) {
+                    // Move to the end
+                    reorderList(draggedList.id, null);
+                }
+            };
+
+            const reorderList = async (draggedListId, targetListId) => {
+                try {
+                    const currentLists = [...board.lists];
+                    const draggedIndex = currentLists.findIndex(list => list.id === draggedListId);
+
+                    if (draggedIndex === -1) return;
+
+                    let targetIndex;
+
+                    if (targetListId === null) {
+                        // Drop at the end
+                        targetIndex = currentLists.length - 1;
+                    } else {
+                        targetIndex = currentLists.findIndex(list => list.id === targetListId);
+                        if (targetIndex === -1) return;
+                    }
+
+                    // Simple swap behavior: remove dragged list and insert at target position
+                    const [draggedListItem] = currentLists.splice(draggedIndex, 1);
+                    currentLists.splice(targetIndex, 0, draggedListItem);
+
+                    // Update positions to match array indices
+                    const updatedLists = currentLists.map((list, index) => ({
+                        ...list,
+                        position: index
+                    }));
+
+                    // Update UI immediately
+                    setBoard(prev => ({
+                        ...prev,
+                        lists: updatedLists
+                    }));
+
+                    // Send to backend
+                    await fetch(`${API_BASE}/lists/${draggedListId}/reorder`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ position: targetIndex })
+                    });
+
+                } catch (err) {
+                    setError('Failed to reorder list');
+                    // Refresh board to get correct order
+                    fetchBoard();
+                }
             };
 
             const handleCardDrop = async (e, targetCard) => {
@@ -330,16 +445,26 @@
                         </div>
                     </div>
 
-                    <div className="board">
+                    <div
+                        className="board"
+                        onDragOver={handleBoardDragOver}
+                        onDrop={handleBoardDrop}
+                    >
                         {board.lists.map(list => (
                             <div
                                 key={list.id}
-                                className={`list ${dragOverList === list.id ? 'drag-over' : ''}`}
+                                className={`list ${dragOverList === list.id ? 'drag-over' : ''} ${draggedList && draggedList.id === list.id ? 'dragging' : ''}`}
+                                draggable
+                                onDragStart={(e) => handleListDragStart(e, list)}
+                                onDragEnd={handleListDragEnd}
                                 onDragOver={(e) => handleListDragOver(e, list.id)}
                                 onDragLeave={handleListDragLeave}
                                 onDrop={(e) => handleListDrop(e, list.id)}
                             >
                                 <div className="list-header">
+                                    <div className="list-drag-handle">
+                                        <i className="fas fa-grip-vertical"></i>
+                                    </div>
                                     {editingList === list.id ? (
                                         <EditListTitle
                                             list={list}
@@ -356,7 +481,10 @@
                                     )}
                                     <button
                                         className="delete-button"
-                                        onClick={() => deleteList(list.id)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteList(list.id);
+                                        }}
                                     >
                                         <i className="fas fa-trash"></i>
                                     </button>

@@ -11,3 +11,8 @@
     * fixing the delete button on cards: Done
     * Fixing teh Droping action: Done
 */
+
+//!
+/*
+    ! the priority is reverting back to medium when refreshing the page
+*/
