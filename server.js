@@ -46,7 +46,6 @@ function initializeDatabase() {
     )
   `);
 
-  // Cards table
   db.run(`
     CREATE TABLE IF NOT EXISTS cards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,6 +53,8 @@ function initializeDatabase() {
       title TEXT NOT NULL,
       description TEXT,
       position INTEGER NOT NULL,
+      priority TEXT DEFAULT 'medium',
+      due_date DATE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (list_id) REFERENCES lists (id) ON DELETE CASCADE
     )
@@ -182,9 +183,9 @@ app.post('/api/lists', (req, res) => {
   });
 });
 
-// Create new card
+// Create new card - Updated to handle priority and due_date
 app.post('/api/cards', (req, res) => {
-  const { list_id, title, description } = req.body;
+  const { list_id, title, description, due_date, priority } = req.body;
   
   // Get the next position
   db.get("SELECT MAX(position) as maxPos FROM cards WHERE list_id = ?", [list_id], (err, row) => {
@@ -195,8 +196,15 @@ app.post('/api/cards', (req, res) => {
     
     const position = (row.maxPos || -1) + 1;
     
-    db.run("INSERT INTO cards (list_id, title, description, position) VALUES (?, ?, ?, ?)",
-      [list_id, title, description || '', position],
+    // Handle date properly - store as date string without time
+    let formattedDate = null;
+    if (due_date) {
+      // Ensure we store just the date part, not datetime
+      formattedDate = due_date.split('T')[0];
+    }
+    
+    db.run("INSERT INTO cards (list_id, title, description, position, priority, due_date) VALUES (?, ?, ?, ?, ?, ?)",
+      [list_id, title, description || '', position, priority || 'medium', formattedDate],
       function(err) {
         if (err) {
           res.status(500).json({ error: err.message });
@@ -207,7 +215,9 @@ app.post('/api/cards', (req, res) => {
           list_id, 
           title, 
           description: description || '', 
-          position 
+          position,
+          priority: priority || 'medium',
+          due_date: formattedDate
         });
       });
   });
@@ -323,20 +333,106 @@ app.put('/api/cards/:id/move', (req, res) => {
   });
 });
 
-// Update card
 app.put('/api/cards/:id', (req, res) => {
   const cardId = req.params.id;
-  const { title, description } = req.body;
+  const { title, description, priority, due_date } = req.body; // Change from due_date to match frontend
   
-  db.run("UPDATE cards SET title = ?, description = ? WHERE id = ?",
-    [title, description || '', cardId],
+  console.log('Updating card with data:', { title, description, priority, due_date }); // Debug log
+  
+  // Handle date properly - store as date string without time
+  let formattedDate = null;
+  if (due_date) {
+    // Ensure we store just the date part, not datetime
+    formattedDate = due_date.split('T')[0];
+  }
+  
+  db.run(
+    "UPDATE cards SET title = ?, description = ?, priority = ?, due_date = ? WHERE id = ?",
+    [title, description || '', priority || 'medium', formattedDate, cardId],
     function(err) {
       if (err) {
+        console.error('Error updating card:', err);
         res.status(500).json({ error: err.message });
         return;
       }
+      console.log('Card updated successfully'); // Debug log
       res.json({ success: true });
+    }
+  );
+});
+
+app.put('/api/lists/:id', (req, res) => {
+  const listId = req.params.id;
+  const { title } = req.body;
+  
+  db.run("UPDATE lists SET title = ? WHERE id = ?", [title, listId], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json({ success: true });
+  });
+});
+
+// Reorder list position (for drag and drop)
+app.put('/api/lists/:id/reorder', (req, res) => {
+  const listId = req.params.id;
+  const { position } = req.body;
+  
+  // Start a transaction to handle position updates
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    
+    // Get current list info
+    db.get("SELECT * FROM lists WHERE id = ?", [listId], (err, currentList) => {
+      if (err) {
+        db.run("ROLLBACK");
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      
+      if (!currentList) {
+        db.run("ROLLBACK");
+        res.status(404).json({ error: 'List not found' });
+        return;
+      }
+      
+      // Get all lists in the same board to determine the correct positions
+      db.all("SELECT * FROM lists WHERE board_id = ? ORDER BY position", [currentList.board_id], (err, allLists) => {
+        if (err) {
+          db.run("ROLLBACK");
+          res.status(500).json({ error: err.message });
+          return;
+        }
+        
+        // Remove the current list from the array
+        const otherLists = allLists.filter(list => list.id !== parseInt(listId));
+        
+        // Insert the current list at the new position
+        otherLists.splice(position, 0, currentList);
+        
+        // Update all list positions
+        let updatePromises = otherLists.map((list, index) => {
+          return new Promise((resolve, reject) => {
+            db.run("UPDATE lists SET position = ? WHERE id = ?", [index, list.id], (err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+        });
+        
+        Promise.all(updatePromises)
+          .then(() => {
+            db.run("COMMIT");
+            res.json({ success: true });
+          })
+          .catch((err) => {
+            db.run("ROLLBACK");
+            res.status(500).json({ error: err.message });
+          });
+      });
     });
+  });
 });
 
 // Delete card

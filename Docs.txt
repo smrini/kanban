@@ -1,18 +1,17 @@
 // Todo: 
 /*
-    * since we are going to add a calendar view later lets add more input fileds to the task form, like date, priority, project... center everything, make the add list button outside the kanban list
     * Adding more inputs to the form
     * Add the ability to edit the list tittle with double click
-    * Getting the card form outside of the list: Done
+    * Done: Getting the card form outside of the list
     * Adding the Calendar view
-    * cancel the action when clicking outside the form: Done
-    * Adding a logo to the tab: Done
-    * Adding font awesome icons: Done
-    * fixing the delete button on cards: Done
-    * Fixing teh Droping action: Done
+    * Done: cancel the action when clicking outside the form
+    * Done: Adding a logo to the tab
+    * Done: Adding font awesome icons
+    * Done: fixing the delete button on cards
+    * Done: Fixing teh Droping action
 */
 
-//!
+// !issue
 /*
-    ! the priority is reverting back to medium when refreshing the page
+    
 */

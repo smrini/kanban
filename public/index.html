@@ -27,6 +27,7 @@
             const [board, setBoard] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
+            const [currentView, setCurrentView] = useState('board'); // 'board' or 'calendar'
             const [draggedCard, setDraggedCard] = useState(null);
             const [draggedList, setDraggedList] = useState(null);
             const [dragOverList, setDragOverList] = useState(null);
@@ -99,7 +100,7 @@
 
             const addCard = async (listId, title, description, dueDate, priority) => {
                 try {
-                    console.log('Adding card with priority:', priority); // Debug log
+                    console.log('Adding card with priority:', priority);
 
                     const response = await fetch(`${API_BASE}/cards`, {
                         method: 'POST',
@@ -116,12 +117,11 @@
                     });
 
                     const newCard = await response.json();
-                    console.log('Received card from API:', newCard); // Debug log
+                    console.log('Received card from API:', newCard);
 
-                    // Ensure the card has the priority field
                     const cardWithPriority = {
                         ...newCard,
-                        priority: newCard.priority || priority, // Fallback to the sent priority
+                        priority: newCard.priority || priority,
                         due_date: newCard.due_date || (dueDate || null)
                     };
 
@@ -135,7 +135,7 @@
                     }));
                     setShowAddCard(null);
                 } catch (err) {
-                    console.error('Error adding card:', err); // Debug log
+                    console.error('Error adding card:', err);
                     setError('Failed to add card');
                 }
             };
@@ -208,12 +208,14 @@
             };
 
             const handleDragStart = (e, card) => {
+                e.stopPropagation();
                 setDraggedCard(card);
                 e.target.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
             };
 
             const handleDragEnd = (e) => {
+                e.stopPropagation();
                 e.target.classList.remove('dragging');
                 setDraggedCard(null);
                 setDraggedList(null);
@@ -221,13 +223,11 @@
                 setDragOverCard(null);
             };
 
-            // List drag handlers
             const handleListDragStart = (e, list) => {
                 setDraggedList(list);
                 e.target.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
             };
-
 
             const handleListDragEnd = (e) => {
                 e.target.classList.remove('dragging');
@@ -239,14 +239,12 @@
                 e.preventDefault();
                 e.stopPropagation();
 
-                // If we're dragging a list over another list
                 if (draggedList && draggedList.id !== listId) {
                     e.dataTransfer.dropEffect = 'move';
                     setDragOverList(listId);
                     return;
                 }
 
-                // If we're dragging a card
                 if (draggedCard) {
                     e.dataTransfer.dropEffect = 'move';
                     setDragOverList(listId);
@@ -267,6 +265,7 @@
             };
 
             const handleCardDragLeave = (e) => {
+                e.stopPropagation();
                 if (!e.currentTarget.contains(e.relatedTarget)) {
                     setDragOverCard(null);
                 }
@@ -276,14 +275,12 @@
                 e.preventDefault();
                 e.stopPropagation();
 
-                // Handle list reordering - simple replacement behavior
                 if (draggedList && draggedList.id !== targetListId) {
                     await reorderList(draggedList.id, targetListId);
                     setDragOverList(null);
                     return;
                 }
 
-                // Handle card movement
                 if (draggedCard && draggedCard.list_id !== targetListId) {
                     await moveCard(draggedCard.id, targetListId, 0);
                 }
@@ -292,7 +289,6 @@
                 setDragOverCard(null);
             };
 
-            // Board-level drop handler for dropping at the end
             const handleBoardDragOver = (e) => {
                 if (draggedList) {
                     e.preventDefault();
@@ -303,7 +299,6 @@
             const handleBoardDrop = (e) => {
                 e.preventDefault();
                 if (draggedList) {
-                    // Move to the end
                     reorderList(draggedList.id, null);
                 }
             };
@@ -318,30 +313,25 @@
                     let targetIndex;
 
                     if (targetListId === null) {
-                        // Drop at the end
                         targetIndex = currentLists.length - 1;
                     } else {
                         targetIndex = currentLists.findIndex(list => list.id === targetListId);
                         if (targetIndex === -1) return;
                     }
 
-                    // Simple swap behavior: remove dragged list and insert at target position
                     const [draggedListItem] = currentLists.splice(draggedIndex, 1);
                     currentLists.splice(targetIndex, 0, draggedListItem);
 
-                    // Update positions to match array indices
                     const updatedLists = currentLists.map((list, index) => ({
                         ...list,
                         position: index
                     }));
 
-                    // Update UI immediately
                     setBoard(prev => ({
                         ...prev,
                         lists: updatedLists
                     }));
 
-                    // Send to backend
                     await fetch(`${API_BASE}/lists/${draggedListId}/reorder`, {
                         method: 'PUT',
                         headers: {
@@ -352,7 +342,6 @@
 
                 } catch (err) {
                     setError('Failed to reorder list');
-                    // Refresh board to get correct order
                     fetchBoard();
                 }
             };
@@ -365,7 +354,6 @@
 
                 if (!draggedCard || draggedCard.id === targetCard.id) return;
 
-                // Calculate position based on drop position
                 const rect = e.currentTarget.getBoundingClientRect();
                 const dropY = e.clientY;
                 const cardMiddle = rect.top + rect.height / 2;
@@ -389,12 +377,10 @@
                         })
                     });
 
-                    // Update local state
                     setBoard(prev => {
                         const newBoard = { ...prev };
                         let movedCard = null;
 
-                        // Remove card from source list
                         newBoard.lists = newBoard.lists.map(list => {
                             if (list.cards.some(card => card.id === cardId)) {
                                 movedCard = list.cards.find(card => card.id === cardId);
@@ -406,7 +392,6 @@
                             return list;
                         });
 
-                        // Add card to target list at specified position
                         newBoard.lists = newBoard.lists.map(list => {
                             if (list.id === targetListId) {
                                 const newCards = [...list.cards];
@@ -440,99 +425,120 @@
                             Add List
                         </button>
                         <div className="views">
-                            <button><i className="fas fa-th-large"></i></button>
-                            <button><i className="fas fa-list"></i></button>
+                            <button
+                                className={currentView === 'board' ? 'active' : ''}
+                                onClick={() => setCurrentView('board')}
+                            >
+                                <i className="fas fa-th-large"></i>
+                            </button>
+                            <button
+                                className={currentView === 'calendar' ? 'active' : ''}
+                                onClick={() => setCurrentView('calendar')}
+                            >
+                                <i className="fas fa-calendar"></i>
+                            </button>
                         </div>
                     </div>
 
-                    <div
-                        className="board"
-                        onDragOver={handleBoardDragOver}
-                        onDrop={handleBoardDrop}
-                    >
-                        {board.lists.map(list => (
-                            <div
-                                key={list.id}
-                                className={`list ${dragOverList === list.id ? 'drag-over' : ''} ${draggedList && draggedList.id === list.id ? 'dragging' : ''}`}
-                                draggable
-                                onDragStart={(e) => handleListDragStart(e, list)}
-                                onDragEnd={handleListDragEnd}
-                                onDragOver={(e) => handleListDragOver(e, list.id)}
-                                onDragLeave={handleListDragLeave}
-                                onDrop={(e) => handleListDrop(e, list.id)}
-                            >
-                                <div className="list-header">
-                                    <div className="list-drag-handle">
-                                        <i className="fas fa-grip-vertical"></i>
+                    {currentView === 'board' ? (
+                        <div
+                            className="board"
+                            onDragOver={handleBoardDragOver}
+                            onDrop={handleBoardDrop}
+                        >
+                            {board.lists.map(list => (
+                                <div
+                                    key={list.id}
+                                    className={`list ${dragOverList === list.id ? 'drag-over' : ''} ${draggedList && draggedList.id === list.id ? 'dragging' : ''}`}
+                                    draggable
+                                    onDragStart={(e) => handleListDragStart(e, list)}
+                                    onDragEnd={handleListDragEnd}
+                                    onDragOver={(e) => handleListDragOver(e, list.id)}
+                                    onDragLeave={handleListDragLeave}
+                                    onDrop={(e) => handleListDrop(e, list.id)}
+                                >
+                                    <div className="list-header">
+                                        <div className="list-drag-handle">
+                                            <i className="fas fa-grip-vertical"></i>
+                                        </div>
+                                        {editingList === list.id ? (
+                                            <EditListTitle
+                                                list={list}
+                                                onSave={updateList}
+                                                onCancel={() => setEditingList(null)}
+                                            />
+                                        ) : (
+                                            <h3
+                                                className="list-title"
+                                                onDoubleClick={() => setEditingList(list.id)}
+                                            >
+                                                {list.title}
+                                            </h3>
+                                        )}
+                                        <button
+                                            className="delete-button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteList(list.id);
+                                            }}
+                                        >
+                                            <i className="fas fa-trash"></i>
+                                        </button>
                                     </div>
-                                    {editingList === list.id ? (
-                                        <EditListTitle
-                                            list={list}
-                                            onSave={updateList}
-                                            onCancel={() => setEditingList(null)}
-                                        />
-                                    ) : (
-                                        <h3
-                                            className="list-title"
-                                            onDoubleClick={() => setEditingList(list.id)}
-                                        >
-                                            {list.title}
-                                        </h3>
-                                    )}
-                                    <button
-                                        className="delete-button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteList(list.id);
-                                        }}
-                                    >
-                                        <i className="fas fa-trash"></i>
-                                    </button>
-                                </div>
 
-                                <div className="list-content">
-                                    {list.cards.map(card => (
-                                        <div
-                                            key={card.id}
-                                            className={`card ${dragOverCard === card.id ? 'drag-over' : ''} priority-${card.priority || 'medium'}`}
-                                            draggable
-                                            onDragStart={(e) => handleDragStart(e, card)}
-                                            onDragEnd={handleDragEnd}
-                                            onDragOver={(e) => handleCardDragOver(e, card)}
-                                            onDragLeave={handleCardDragLeave}
-                                            onDrop={(e) => handleCardDrop(e, card)}
-                                            onClick={() => setEditingCard(card)}
-                                        >
-                                            <div className="card-title">{card.title}</div>
-                                            {card.description && (
-                                                <div className="card-description">{card.description}</div>
-                                            )}
-                                            <div className="card-meta">
-                                                {card.due_date && (
-                                                    <div className={`card-due-date ${new Date(card.due_date) < new Date() ? 'overdue' : ''}`}>
-                                                        <i className="fas fa-calendar"></i>
-                                                        {new Date(card.due_date).toLocaleDateString()}
-                                                    </div>
+                                    <div className="list-content">
+                                        {list.cards.map(card => (
+                                            <div
+                                                key={card.id}
+                                                className={`card ${dragOverCard === card.id ? 'drag-over' : ''} priority-${card.priority || 'medium'}`}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, card)}
+                                                onDragEnd={handleDragEnd}
+                                                onDragOver={(e) => handleCardDragOver(e, card)}
+                                                onDragLeave={handleCardDragLeave}
+                                                onDrop={(e) => handleCardDrop(e, card)}
+                                                onClick={(e) => {
+                                                    if (!draggedCard) {
+                                                        setEditingCard(card);
+                                                    }
+                                                }}
+                                            >
+                                                <div className="card-title">{card.title}</div>
+                                                {card.description && (
+                                                    <div className="card-description">{card.description}</div>
                                                 )}
-                                                <div className={`card-priority priority-${card.priority || 'medium'}`}>
-                                                    <i className="fas fa-flag"></i>
-                                                    {(card.priority || 'medium').charAt(0).toUpperCase() + (card.priority || 'medium').slice(1)}
+                                                <div className="card-meta">
+                                                    {card.due_date && (
+                                                        <div className={`card-due-date ${new Date(card.due_date + 'T00:00:00') < new Date() ? 'overdue' : ''}`}>
+                                                            <i className="fas fa-calendar"></i>
+                                                            {new Date(card.due_date + 'T00:00:00').toLocaleDateString()}
+                                                        </div>
+                                                    )}
+                                                    <div className={`card-priority priority-${card.priority || 'medium'}`}>
+                                                        <i className="fas fa-flag"></i>
+                                                        {(card.priority || 'medium').charAt(0).toUpperCase() + (card.priority || 'medium').slice(1)}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
 
-                                <button
-                                    className="add-button"
-                                    onClick={() => setShowAddCard(list.id)}
-                                >
-                                    <i className="fas fa-plus"></i>
-                                    Add Card
-                                </button>
-                            </div>
-                        ))}
-                    </div>
+                                    <button
+                                        className="add-button"
+                                        onClick={() => setShowAddCard(list.id)}
+                                    >
+                                        <i className="fas fa-plus"></i>
+                                        Add Card
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <CalendarView
+                            board={board}
+                            onEditCard={(card) => setEditingCard(card)}
+                        />
+                    )}
 
                     {showAddList && (
                         <AddListModal
@@ -556,6 +562,155 @@
                             onClose={() => setEditingCard(null)}
                         />
                     )}
+                </div>
+            );
+        }
+
+        function CalendarView({ board, onEditCard }) {
+            const [currentDate, setCurrentDate] = useState(new Date());
+            const [selectedDate, setSelectedDate] = useState(null);
+
+            // Get all cards with due dates
+            const getAllCards = () => {
+                return board.lists.flatMap(list =>
+                    list.cards.map(card => ({
+                        ...card,
+                        listName: list.title
+                    }))
+                );
+            };
+
+            // Get cards for a specific date - Fixed date comparison
+            const getCardsForDate = (date) => {
+                // Format the date as YYYY-MM-DD in local timezone
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+
+                return getAllCards().filter(card => {
+                    if (!card.due_date) return false;
+                    // Extract just the date part from the stored due_date
+                    const cardDateStr = card.due_date.split('T')[0];
+                    return cardDateStr === dateStr;
+                });
+            };
+
+            // Generate calendar days
+            const generateCalendarDays = () => {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                const daysInMonth = lastDay.getDate();
+                const startingDayOfWeek = firstDay.getDay();
+
+                const days = [];
+
+                // Add empty cells for days before the first day of the month
+                for (let i = 0; i < startingDayOfWeek; i++) {
+                    days.push(null);
+                }
+
+                // Add days of the month
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const cards = getCardsForDate(date);
+                    days.push({ date, cards });
+                }
+
+                return days;
+            };
+
+            const navigateMonth = (direction) => {
+                setCurrentDate(prev => {
+                    const newDate = new Date(prev);
+                    newDate.setMonth(prev.getMonth() + direction);
+                    return newDate;
+                });
+            };
+
+            const isToday = (date) => {
+                const today = new Date();
+                return date.getFullYear() === today.getFullYear() &&
+                    date.getMonth() === today.getMonth() &&
+                    date.getDate() === today.getDate();
+            };
+
+            const isOverdue = (date) => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                date.setHours(0, 0, 0, 0);
+                return date < today;
+            };
+
+            const monthNames = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+            ];
+
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            return (
+                <div className="calendar-view">
+                    <div className="calendar-header">
+                        <button
+                            className="calendar-nav-button"
+                            onClick={() => navigateMonth(-1)}
+                        >
+                            <i className="fas fa-chevron-left"></i>
+                        </button>
+                        <h2 className="calendar-title">
+                            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                        </h2>
+                        <button
+                            className="calendar-nav-button"
+                            onClick={() => navigateMonth(1)}
+                        >
+                            <i className="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+
+                    <div className="calendar-grid">
+                        {dayNames.map(day => (
+                            <div key={day} className="calendar-day-header">
+                                {day}
+                            </div>
+                        ))}
+
+                        {generateCalendarDays().map((dayData, index) => (
+                            <div
+                                key={index}
+                                className={`calendar-day ${dayData
+                                    ? `${isToday(dayData.date) ? 'today' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''}`
+                                    : 'empty'
+                                    }`}
+                            >
+                                {dayData && (
+                                    <>
+                                        <div className="calendar-day-number">
+                                            {dayData.date.getDate()}
+                                        </div>
+                                        <div className="calendar-day-cards">
+                                            {dayData.cards.map(card => (
+                                                <div
+                                                    key={card.id}
+                                                    className={`calendar-card priority-${card.priority || 'medium'} ${isOverdue(new Date(dayData.date)) ? 'overdue' : ''
+                                                        }`}
+                                                    onClick={() => onEditCard(card)}
+                                                    title={`${card.title} (${card.listName})`}
+                                                >
+                                                    <div className="calendar-card-title">{card.title}</div>
+                                                    <div className="calendar-card-list">{card.listName}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         }
