@@ -1,5 +1,5 @@
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
+const mysql = require("mysql");
 const cors = require("cors");
 const path = require("path");
 
@@ -17,12 +17,22 @@ app.use(
 	)
 );
 
-// Initialize SQLite database
-const db = new sqlite3.Database("./kanban.db", (err) => {
+// Initialize MySQL database connection
+const db = mysql.createConnection({
+	host: "localhost",
+	user: "root",
+	password: "", // Default Laragon MySQL password is empty
+	database: "kanban_db",
+	port: 3306, // Default MySQL port
+});
+
+// Connect to database
+db.connect((err) => {
 	if (err) {
-		console.error("Error opening database:", err.message);
+		console.error("Error connecting to MySQL database:", err.message);
+		process.exit(1);
 	} else {
-		console.log("Connected to SQLite database");
+		console.log("Connected to MySQL database");
 		initializeDatabase();
 	}
 });
@@ -30,57 +40,77 @@ const db = new sqlite3.Database("./kanban.db", (err) => {
 // Initialize database tables
 function initializeDatabase() {
 	// Boards table
-	db.run(`
-    CREATE TABLE IF NOT EXISTS boards (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+	db.query(
+		`
+        CREATE TABLE IF NOT EXISTS boards (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `,
+		(err) => {
+			if (err) console.error("Error creating boards table:", err);
+		}
+	);
 
 	// Lists table
-	db.run(`
-    CREATE TABLE IF NOT EXISTS lists (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      board_id INTEGER,
-      title TEXT NOT NULL,
-      position INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (board_id) REFERENCES boards (id) ON DELETE CASCADE
-    )
-  `);
+	db.query(
+		`
+        CREATE TABLE IF NOT EXISTS lists (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            board_id INT,
+            title VARCHAR(255) NOT NULL,
+            position INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+        )
+    `,
+		(err) => {
+			if (err) console.error("Error creating lists table:", err);
+		}
+	);
 
-	db.run(`
-    CREATE TABLE IF NOT EXISTS cards (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      list_id INTEGER,
-      title TEXT NOT NULL,
-      description TEXT,
-      position INTEGER NOT NULL,
-      priority TEXT DEFAULT 'medium',
-      due_date DATE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (list_id) REFERENCES lists (id) ON DELETE CASCADE
-    )
-  `);
+	// Cards table
+	db.query(
+		`
+        CREATE TABLE IF NOT EXISTS cards (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            list_id INT,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            position INT NOT NULL,
+            priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+            due_date DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+        )
+    `,
+		(err) => {
+			if (err) console.error("Error creating cards table:", err);
+		}
+	);
 
 	// Create default board and lists if they don't exist
-	db.get("SELECT COUNT(*) as count FROM boards", (err, row) => {
-		if (row.count === 0) {
+	db.query("SELECT COUNT(*) as count FROM boards", (err, results) => {
+		if (err) {
+			console.error("Error checking boards:", err);
+			return;
+		}
+		if (results[0].count === 0) {
 			createDefaultData();
 		}
 	});
 }
 
 function createDefaultData() {
-	db.run(
+	db.query(
 		"INSERT INTO boards (title, description) VALUES (?, ?)",
 		["KanBan Board", "Welcome to your Kanban board!"],
-		function (err) {
+		function (err, result) {
 			if (err) return console.error(err);
 
-			const boardId = this.lastID;
+			const boardId = result.insertId;
 			const defaultLists = [
 				{ title: "To Do", position: 0 },
 				{ title: "In Progress", position: 1 },
@@ -88,9 +118,13 @@ function createDefaultData() {
 			];
 
 			defaultLists.forEach((list) => {
-				db.run(
+				db.query(
 					"INSERT INTO lists (board_id, title, position) VALUES (?, ?, ?)",
-					[boardId, list.title, list.position]
+					[boardId, list.title, list.position],
+					(err) => {
+						if (err)
+							console.error("Error creating default list:", err);
+					}
 				);
 			});
 		}
@@ -101,13 +135,16 @@ function createDefaultData() {
 
 // Get all boards
 app.get("/api/boards", (req, res) => {
-	db.all("SELECT * FROM boards ORDER BY created_at DESC", (err, rows) => {
-		if (err) {
-			res.status(500).json({ error: err.message });
-			return;
+	db.query(
+		"SELECT * FROM boards ORDER BY created_at DESC",
+		(err, results) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			res.json(results);
 		}
-		res.json(rows);
-	});
+	);
 });
 
 // Get board with lists and cards
@@ -115,64 +152,70 @@ app.get("/api/boards/:id", (req, res) => {
 	const boardId = req.params.id;
 
 	// Get board info
-	db.get("SELECT * FROM boards WHERE id = ?", [boardId], (err, board) => {
-		if (err) {
-			res.status(500).json({ error: err.message });
-			return;
-		}
-		if (!board) {
-			res.status(404).json({ error: "Board not found" });
-			return;
-		}
-
-		// Get lists for this board
-		db.all(
-			"SELECT * FROM lists WHERE board_id = ? ORDER BY position",
-			[boardId],
-			(err, lists) => {
-				if (err) {
-					res.status(500).json({ error: err.message });
-					return;
-				}
-
-				// Get cards for each list
-				const listPromises = lists.map((list) => {
-					return new Promise((resolve, reject) => {
-						db.all(
-							"SELECT * FROM cards WHERE list_id = ? ORDER BY position",
-							[list.id],
-							(err, cards) => {
-								if (err) reject(err);
-								else resolve({ ...list, cards });
-							}
-						);
-					});
-				});
-
-				Promise.all(listPromises)
-					.then((listsWithCards) => {
-						res.json({ ...board, lists: listsWithCards });
-					})
-					.catch((err) => {
-						res.status(500).json({ error: err.message });
-					});
+	db.query(
+		"SELECT * FROM boards WHERE id = ?",
+		[boardId],
+		(err, boardResults) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
 			}
-		);
-	});
+			if (boardResults.length === 0) {
+				res.status(404).json({ error: "Board not found" });
+				return;
+			}
+
+			const board = boardResults[0];
+
+			// Get lists for this board
+			db.query(
+				"SELECT * FROM lists WHERE board_id = ? ORDER BY position",
+				[boardId],
+				(err, lists) => {
+					if (err) {
+						res.status(500).json({ error: err.message });
+						return;
+					}
+
+					// Get cards for each list
+					const listPromises = lists.map((list) => {
+						return new Promise((resolve, reject) => {
+							db.query(
+								"SELECT * FROM cards WHERE list_id = ? ORDER BY position",
+								[list.id],
+								(err, cards) => {
+									if (err) reject(err);
+									else resolve({ ...list, cards });
+								}
+							);
+						});
+					});
+
+					Promise.all(listPromises)
+						.then((listsWithCards) => {
+							res.json({ ...board, lists: listsWithCards });
+						})
+						.catch((err) => {
+							res.status(500).json({ error: err.message });
+						});
+				}
+			);
+		}
+	);
 });
 
 // Create new board
 app.post("/api/boards", (req, res) => {
 	const { title, description } = req.body;
-	db.run(
+	db.query(
 		"INSERT INTO boards (title, description) VALUES (?, ?)",
 		[title, description || ""],
-		function (err) {
+		function (err, result) {
 			if (err) {
 				res.status(500).json({ error: err.message });
 				return;
 			}
-			res.json({ id: this.lastID, title, description });
+			res.json({ id: result.insertId, title, description });
 		}
 	);
 });
@@ -182,27 +225,27 @@ app.post("/api/lists", (req, res) => {
 	const { board_id, title } = req.body;
 
 	// Get the next position
-	db.get(
-		"SELECT MAX(position) as maxPos FROM lists WHERE board_id = ?",
+	db.query(
+		"SELECT COALESCE(MAX(position), -1) + 1 as nextPos FROM lists WHERE board_id = ?",
 		[board_id],
-		(err, row) => {
+		(err, results) => {
 			if (err) {
 				res.status(500).json({ error: err.message });
 				return;
 			}
 
-			const position = (row.maxPos || -1) + 1;
+			const position = results[0].nextPos;
 
-			db.run(
+			db.query(
 				"INSERT INTO lists (board_id, title, position) VALUES (?, ?, ?)",
 				[board_id, title, position],
-				function (err) {
+				function (err, result) {
 					if (err) {
 						res.status(500).json({ error: err.message });
 						return;
 					}
 					res.json({
-						id: this.lastID,
+						id: result.insertId,
 						board_id,
 						title,
 						position,
@@ -219,16 +262,16 @@ app.post("/api/cards", (req, res) => {
 	const { list_id, title, description, due_date, priority } = req.body;
 
 	// Get the next position
-	db.get(
-		"SELECT MAX(position) as maxPos FROM cards WHERE list_id = ?",
+	db.query(
+		"SELECT COALESCE(MAX(position), -1) + 1 as nextPos FROM cards WHERE list_id = ?",
 		[list_id],
-		(err, row) => {
+		(err, results) => {
 			if (err) {
 				res.status(500).json({ error: err.message });
 				return;
 			}
 
-			const position = (row.maxPos || -1) + 1;
+			const position = results[0].nextPos;
 
 			// Handle date properly - store as date string without time
 			let formattedDate = null;
@@ -237,7 +280,7 @@ app.post("/api/cards", (req, res) => {
 				formattedDate = due_date.split("T")[0];
 			}
 
-			db.run(
+			db.query(
 				"INSERT INTO cards (list_id, title, description, position, priority, due_date) VALUES (?, ?, ?, ?, ?, ?)",
 				[
 					list_id,
@@ -247,13 +290,13 @@ app.post("/api/cards", (req, res) => {
 					priority || "medium",
 					formattedDate,
 				],
-				function (err) {
+				function (err, result) {
 					if (err) {
 						res.status(500).json({ error: err.message });
 						return;
 					}
 					res.json({
-						id: this.lastID,
+						id: result.insertId,
 						list_id,
 						title,
 						description: description || "",
@@ -272,92 +315,107 @@ app.put("/api/cards/:id/move", (req, res) => {
 	const cardId = req.params.id;
 	const { list_id, position } = req.body;
 
-	// Start a transaction to handle position updates
-	db.serialize(() => {
-		db.run("BEGIN TRANSACTION");
+	// Start a transaction
+	db.beginTransaction((err) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
 
 		// Get current card info
-		db.get(
+		db.query(
 			"SELECT * FROM cards WHERE id = ?",
 			[cardId],
-			(err, currentCard) => {
+			(err, results) => {
 				if (err) {
-					db.run("ROLLBACK");
-					res.status(500).json({ error: err.message });
-					return;
+					return db.rollback(() => {
+						res.status(500).json({ error: err.message });
+					});
 				}
 
-				if (!currentCard) {
-					db.run("ROLLBACK");
-					res.status(404).json({ error: "Card not found" });
-					return;
+				if (results.length === 0) {
+					return db.rollback(() => {
+						res.status(404).json({ error: "Card not found" });
+					});
 				}
+
+				const currentCard = results[0];
 
 				// If moving to the same list, adjust positions
 				if (currentCard.list_id === list_id) {
 					// Moving within the same list
 					if (position > currentCard.position) {
 						// Moving down: decrease position of cards between old and new position
-						db.run(
+						db.query(
 							"UPDATE cards SET position = position - 1 WHERE list_id = ? AND position > ? AND position <= ?",
 							[list_id, currentCard.position, position],
 							(err) => {
 								if (err) {
-									db.run("ROLLBACK");
-									res.status(500).json({
-										error: err.message,
+									return db.rollback(() => {
+										res.status(500).json({
+											error: err.message,
+										});
 									});
-									return;
 								}
 								updateCardPosition();
 							}
 						);
 					} else if (position < currentCard.position) {
 						// Moving up: increase position of cards between new and old position
-						db.run(
+						db.query(
 							"UPDATE cards SET position = position + 1 WHERE list_id = ? AND position >= ? AND position < ?",
 							[list_id, position, currentCard.position],
 							(err) => {
 								if (err) {
-									db.run("ROLLBACK");
-									res.status(500).json({
-										error: err.message,
+									return db.rollback(() => {
+										res.status(500).json({
+											error: err.message,
+										});
 									});
-									return;
 								}
 								updateCardPosition();
 							}
 						);
 					} else {
 						// Same position, no change needed
-						db.run("COMMIT");
-						res.json({ success: true });
+						db.commit((err) => {
+							if (err) {
+								return db.rollback(() => {
+									res.status(500).json({
+										error: err.message,
+									});
+								});
+							}
+							res.json({ success: true });
+						});
 						return;
 					}
 				} else {
 					// Moving to different list
 					// First, decrease positions in the old list
-					db.run(
+					db.query(
 						"UPDATE cards SET position = position - 1 WHERE list_id = ? AND position > ?",
 						[currentCard.list_id, currentCard.position],
 						(err) => {
 							if (err) {
-								db.run("ROLLBACK");
-								res.status(500).json({ error: err.message });
-								return;
+								return db.rollback(() => {
+									res.status(500).json({
+										error: err.message,
+									});
+								});
 							}
 
 							// Then, increase positions in the new list
-							db.run(
+							db.query(
 								"UPDATE cards SET position = position + 1 WHERE list_id = ? AND position >= ?",
 								[list_id, position],
 								(err) => {
 									if (err) {
-										db.run("ROLLBACK");
-										res.status(500).json({
-											error: err.message,
+										return db.rollback(() => {
+											res.status(500).json({
+												error: err.message,
+											});
 										});
-										return;
 									}
 									updateCardPosition();
 								}
@@ -368,17 +426,27 @@ app.put("/api/cards/:id/move", (req, res) => {
 
 				function updateCardPosition() {
 					// Finally, update the moved card
-					db.run(
+					db.query(
 						"UPDATE cards SET list_id = ?, position = ? WHERE id = ?",
 						[list_id, position, cardId],
 						function (err) {
 							if (err) {
-								db.run("ROLLBACK");
-								res.status(500).json({ error: err.message });
-								return;
+								return db.rollback(() => {
+									res.status(500).json({
+										error: err.message,
+									});
+								});
 							}
-							db.run("COMMIT");
-							res.json({ success: true });
+							db.commit((err) => {
+								if (err) {
+									return db.rollback(() => {
+										res.status(500).json({
+											error: err.message,
+										});
+									});
+								}
+								res.json({ success: true });
+							});
 						}
 					);
 				}
@@ -394,17 +462,19 @@ app.put("/api/cards/:id", (req, res) => {
 	console.log("Updating card with data:", updates); // Debug log
 
 	// Get current card data first
-	db.get("SELECT * FROM cards WHERE id = ?", [cardId], (err, currentCard) => {
+	db.query("SELECT * FROM cards WHERE id = ?", [cardId], (err, results) => {
 		if (err) {
 			console.error("Error fetching current card:", err);
 			res.status(500).json({ error: err.message });
 			return;
 		}
 
-		if (!currentCard) {
+		if (results.length === 0) {
 			res.status(404).json({ error: "Card not found" });
 			return;
 		}
+
+		const currentCard = results[0];
 
 		// Merge current data with updates
 		const updatedData = {
@@ -430,7 +500,7 @@ app.put("/api/cards/:id", (req, res) => {
 			formattedDate = updatedData.due_date.split("T")[0];
 		}
 
-		db.run(
+		db.query(
 			"UPDATE cards SET title = ?, description = ?, priority = ?, due_date = ? WHERE id = ?",
 			[
 				updatedData.title,
@@ -456,7 +526,7 @@ app.put("/api/lists/:id", (req, res) => {
 	const listId = req.params.id;
 	const { title } = req.body;
 
-	db.run(
+	db.query(
 		"UPDATE lists SET title = ? WHERE id = ?",
 		[title, listId],
 		function (err) {
@@ -474,36 +544,41 @@ app.put("/api/lists/:id/reorder", (req, res) => {
 	const listId = req.params.id;
 	const { position } = req.body;
 
-	// Start a transaction to handle position updates
-	db.serialize(() => {
-		db.run("BEGIN TRANSACTION");
+	// Start a transaction
+	db.beginTransaction((err) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
 
 		// Get current list info
-		db.get(
+		db.query(
 			"SELECT * FROM lists WHERE id = ?",
 			[listId],
-			(err, currentList) => {
+			(err, results) => {
 				if (err) {
-					db.run("ROLLBACK");
-					res.status(500).json({ error: err.message });
-					return;
+					return db.rollback(() => {
+						res.status(500).json({ error: err.message });
+					});
 				}
 
-				if (!currentList) {
-					db.run("ROLLBACK");
-					res.status(404).json({ error: "List not found" });
-					return;
+				if (results.length === 0) {
+					return db.rollback(() => {
+						res.status(404).json({ error: "List not found" });
+					});
 				}
+
+				const currentList = results[0];
 
 				// Get all lists in the same board to determine the correct positions
-				db.all(
+				db.query(
 					"SELECT * FROM lists WHERE board_id = ? ORDER BY position",
 					[currentList.board_id],
 					(err, allLists) => {
 						if (err) {
-							db.run("ROLLBACK");
-							res.status(500).json({ error: err.message });
-							return;
+							return db.rollback(() => {
+								res.status(500).json({ error: err.message });
+							});
 						}
 
 						// Remove the current list from the array
@@ -517,7 +592,7 @@ app.put("/api/lists/:id/reorder", (req, res) => {
 						// Update all list positions
 						let updatePromises = otherLists.map((list, index) => {
 							return new Promise((resolve, reject) => {
-								db.run(
+								db.query(
 									"UPDATE lists SET position = ? WHERE id = ?",
 									[index, list.id],
 									(err) => {
@@ -530,12 +605,23 @@ app.put("/api/lists/:id/reorder", (req, res) => {
 
 						Promise.all(updatePromises)
 							.then(() => {
-								db.run("COMMIT");
-								res.json({ success: true });
+								db.commit((err) => {
+									if (err) {
+										return db.rollback(() => {
+											res.status(500).json({
+												error: err.message,
+											});
+										});
+									}
+									res.json({ success: true });
+								});
 							})
 							.catch((err) => {
-								db.run("ROLLBACK");
-								res.status(500).json({ error: err.message });
+								db.rollback(() => {
+									res.status(500).json({
+										error: err.message,
+									});
+								});
 							});
 					}
 				);
@@ -548,7 +634,7 @@ app.put("/api/lists/:id/reorder", (req, res) => {
 app.delete("/api/cards/:id", (req, res) => {
 	const cardId = req.params.id;
 
-	db.run("DELETE FROM cards WHERE id = ?", [cardId], function (err) {
+	db.query("DELETE FROM cards WHERE id = ?", [cardId], function (err) {
 		if (err) {
 			res.status(500).json({ error: err.message });
 			return;
@@ -561,7 +647,7 @@ app.delete("/api/cards/:id", (req, res) => {
 app.delete("/api/lists/:id", (req, res) => {
 	const listId = req.params.id;
 
-	db.run("DELETE FROM lists WHERE id = ?", [listId], function (err) {
+	db.query("DELETE FROM lists WHERE id = ?", [listId], function (err) {
 		if (err) {
 			res.status(500).json({ error: err.message });
 			return;
@@ -578,7 +664,7 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on("SIGINT", () => {
 	console.log("\nShutting down server...");
-	db.close((err) => {
+	db.end((err) => {
 		if (err) {
 			console.error(err.message);
 		} else {

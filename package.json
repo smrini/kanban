@@ -14,17 +14,17 @@
     "project-management",
     "nodejs",
     "express",
-    "sqlite",
+    "mysql",
     "react"
   ],
-  "author": "Your Name",
+  "author": "Said Mrini",
   "license": "MIT",
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
     "@hotjar/browser": "^1.0.9",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "sqlite3": "^5.1.6"
+    "mysql": "^2.18.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
