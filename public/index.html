@@ -641,16 +641,6 @@
                         </div>
                     </div>
 
-                    {currentView === 'calendar' && (
-                        <CalendarView
-                            board={board}
-                            filters={filters}
-                            onEditCard={(card) => setEditingCard(card)}
-                            onAddCard={addCard}
-                            onUpdateCard={updateCardInBoard} // Pass the update function
-                        />
-                    )}
-
                     {showFilters && (
                         <FilterBar
                             filters={filters}
@@ -659,6 +649,16 @@
                             hasActiveFilters={hasActiveFilters()}
                             filteredCount={getFilteredCardsCount()}
                             totalCount={board.lists.flatMap(list => list.cards).length}
+                        />
+                    )}
+
+                    {currentView === 'calendar' && (
+                        <CalendarView
+                            board={board}
+                            filters={filters}
+                            onEditCard={(card) => setEditingCard(card)}
+                            onAddCard={addCard}
+                            onUpdateCard={updateCardInBoard} // Pass the update function
                         />
                     )}
 
