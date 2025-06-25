@@ -43,6 +43,25 @@
                 priority: 'all',
                 dueDate: 'all'
             });
+            const [confirmation, setConfirmation] = useState({
+                isOpen: false,
+                title: '',
+                message: '',
+                onConfirm: null,
+                confirmText: 'Yes',
+                cancelText: 'No',
+                isDestructive: false
+            });
+
+            // Make the update function available globally for the calendar component
+            useEffect(() => {
+                window.updateBoardAfterCardUpdate = updateCardInBoard;
+
+                // Cleanup on unmount
+                return () => {
+                    delete window.updateBoardAfterCardUpdate;
+                };
+            }, []);
 
             useEffect(() => {
                 fetchBoard();
@@ -66,6 +85,34 @@
 
             const toggleFilters = () => {
                 setShowFilters(prev => !prev);
+            };
+
+            // Helper function to show confirmation
+            const showConfirmation = ({ title, message, onConfirm, confirmText = 'Yes', cancelText = 'No', isDestructive = false }) => {
+                setConfirmation({
+                    isOpen: true,
+                    title,
+                    message,
+                    onConfirm: () => {
+                        onConfirm();
+                        hideConfirmation();
+                    },
+                    confirmText,
+                    cancelText,
+                    isDestructive
+                });
+            };
+
+            const hideConfirmation = () => {
+                setConfirmation({
+                    isOpen: false,
+                    title: '',
+                    message: '',
+                    onConfirm: null,
+                    confirmText: 'Yes',
+                    cancelText: 'No',
+                    isDestructive: false
+                });
             };
 
             const fetchBoard = async () => {
@@ -206,38 +253,75 @@
                 }
             };
 
-            const deleteCard = async (cardId) => {
-                try {
-                    await fetch(`${API_BASE}/cards/${cardId}`, {
-                        method: 'DELETE'
-                    });
+            const updateCardInBoard = (cardId, updates) => {
+                setBoard(prev => ({
+                    ...prev,
+                    lists: prev.lists.map(list => ({
+                        ...list,
+                        cards: list.cards.map(card =>
+                            card.id === cardId
+                                ? { ...card, ...updates }
+                                : card
+                        )
+                    }))
+                }));
+            };
 
-                    setBoard(prev => ({
-                        ...prev,
-                        lists: prev.lists.map(list => ({
-                            ...list,
-                            cards: list.cards.filter(card => card.id !== cardId)
-                        }))
-                    }));
-                    setEditingCard(null);
-                } catch (err) {
-                    setError('Failed to delete card');
-                }
+            const deleteCard = async (cardId) => {
+                const card = board.lists.flatMap(list => list.cards).find(c => c.id === cardId);
+
+                showConfirmation({
+                    title: 'Delete Card',
+                    message: `Are you sure you want to delete "${card?.title}"?\n
+                    This action cannot be undone.`,
+                    confirmText: 'Delete Card',
+                    cancelText: 'Cancel',
+                    isDestructive: true,
+                    onConfirm: async () => {
+                        try {
+                            await fetch(`${API_BASE}/cards/${cardId}`, {
+                                method: 'DELETE'
+                            });
+
+                            setBoard(prev => ({
+                                ...prev,
+                                lists: prev.lists.map(list => ({
+                                    ...list,
+                                    cards: list.cards.filter(card => card.id !== cardId)
+                                }))
+                            }));
+                            setEditingCard(null);
+                        } catch (err) {
+                            setError('Failed to delete card');
+                        }
+                    }
+                });
             };
 
             const deleteList = async (listId) => {
-                try {
-                    await fetch(`${API_BASE}/lists/${listId}`, {
-                        method: 'DELETE'
-                    });
+                const list = board.lists.find(l => l.id === listId);
+                const cardCount = list?.cards?.length || 0;
 
-                    setBoard(prev => ({
-                        ...prev,
-                        lists: prev.lists.filter(list => list.id !== listId)
-                    }));
-                } catch (err) {
-                    setError('Failed to delete list');
-                }
+                showConfirmation({
+                    title: 'Delete List',
+                    message: `Are you sure you want to delete "${list?.title}"?${cardCount > 0 ? `\nThis will also delete ${cardCount} card${cardCount === 1 ? '' : 's'}.` : ''}\nThis action cannot be undone.`, confirmText: 'Delete List',
+                    cancelText: 'Cancel',
+                    isDestructive: true,
+                    onConfirm: async () => {
+                        try {
+                            await fetch(`${API_BASE}/lists/${listId}`, {
+                                method: 'DELETE'
+                            });
+
+                            setBoard(prev => ({
+                                ...prev,
+                                lists: prev.lists.filter(list => list.id !== listId)
+                            }));
+                        } catch (err) {
+                            setError('Failed to delete list');
+                        }
+                    }
+                });
             };
 
             const handleDragStart = (e, card) => {
@@ -557,6 +641,16 @@
                         </div>
                     </div>
 
+                    {currentView === 'calendar' && (
+                        <CalendarView
+                            board={board}
+                            filters={filters}
+                            onEditCard={(card) => setEditingCard(card)}
+                            onAddCard={addCard}
+                            onUpdateCard={updateCardInBoard} // Pass the update function
+                        />
+                    )}
+
                     {showFilters && (
                         <FilterBar
                             filters={filters}
@@ -568,7 +662,7 @@
                         />
                     )}
 
-                    {currentView === 'board' ? (
+                    {currentView === 'board' && (
                         <div
                             className="board"
                             onDragOver={handleBoardDragOver}
@@ -661,13 +755,6 @@
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <CalendarView
-                            board={board}
-                            filters={filters}
-                            onEditCard={(card) => setEditingCard(card)}
-                            onAddCard={addCard}
-                        />
                     )}
 
                     {showAddList && (
@@ -692,6 +779,16 @@
                             onClose={() => setEditingCard(null)}
                         />
                     )}
+                    <ConfirmationModal
+                        isOpen={confirmation.isOpen}
+                        title={confirmation.title}
+                        message={confirmation.message}
+                        onConfirm={confirmation.onConfirm}
+                        onCancel={hideConfirmation}
+                        confirmText={confirmation.confirmText}
+                        cancelText={confirmation.cancelText}
+                        isDestructive={confirmation.isDestructive}
+                    />
                 </div>
             );
         }
@@ -779,7 +876,7 @@
             );
         }
 
-        function CalendarView({ board, filters, onEditCard, onAddCard }) {
+        function CalendarView({ board, filters, onEditCard, onAddCard, onUpdateCard }) {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [selectedDate, setSelectedDate] = useState(null);
             const [showGoToDate, setShowGoToDate] = useState(false);
@@ -787,6 +884,9 @@
             const [showAddTaskModal, setShowAddTaskModal] = useState(false);
             const [selectedDateForTask, setSelectedDateForTask] = useState(null);
             const [highlightedDate, setHighlightedDate] = useState(null);
+            const [draggedCard, setDraggedCard] = useState(null);
+            const [dragOverDate, setDragOverDate] = useState(null);
+            const [isDragging, setIsDragging] = useState(false);
 
             // Get all cards with due dates and apply filters
             const getAllCards = () => {
@@ -886,6 +986,105 @@
                 });
             };
 
+            const updateCardDueDate = async (cardId, newDueDate) => {
+                try {
+                    const response = await fetch(`${API_BASE}/cards/${cardId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            due_date: newDueDate
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to update card');
+                    }
+
+                    // Update the board state using the passed function
+                    if (onUpdateCard) {
+                        onUpdateCard(cardId, { due_date: newDueDate });
+                    }
+                } catch (error) {
+                    console.error('Error updating card date:', error);
+                }
+            };
+
+            // Calendar card drag handlers
+            const handleCardDragStart = (e, card) => {
+                e.stopPropagation();
+                setDraggedCard(card);
+                setIsDragging(true); // Set dragging flag
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+
+                // Add visual feedback
+                e.target.style.opacity = '0.5';
+            };
+
+            const handleCardDragEnd = (e) => {
+                e.stopPropagation();
+                setDraggedCard(null);
+                setDragOverDate(null);
+
+                // Reset visual feedback
+                e.target.style.opacity = '1';
+
+                // Reset dragging flag after a short delay to prevent click
+                setTimeout(() => {
+                    setIsDragging(false);
+                }, 100);
+            };
+
+            const handleDateDragOver = (e, date) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (draggedCard) {
+                    e.dataTransfer.dropEffect = 'move';
+                    setDragOverDate(date);
+                }
+            };
+
+            const handleDateDragLeave = (e) => {
+                e.stopPropagation();
+                // Only clear drag over if we're actually leaving the date cell
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setDragOverDate(null);
+                }
+            };
+
+            const handleDateDrop = async (e, targetDate) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!draggedCard) return;
+
+                const year = targetDate.getFullYear();
+                const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+                const day = String(targetDate.getDate()).padStart(2, '0');
+                const newDueDateStr = `${year}-${month}-${day}`;
+
+                // Check if the date is actually different
+                const currentDueDateStr = draggedCard.due_date;
+                if (currentDueDateStr !== newDueDateStr) {
+                    await updateCardDueDate(draggedCard.id, newDueDateStr);
+                }
+
+                setDraggedCard(null);
+                setDragOverDate(null);
+            };
+
+            // Handle card click - prevent when dragging
+            const handleCardClick = (e, card) => {
+                e.stopPropagation();
+                // Only open edit modal if not dragging
+                if (!isDragging) {
+                    onEditCard(card);
+                }
+            };
+
             const goToDate = (dateString) => {
                 if (!dateString) return;
 
@@ -932,6 +1131,13 @@
                 return date.getFullYear() === highlightedDate.getFullYear() &&
                     date.getMonth() === highlightedDate.getMonth() &&
                     date.getDate() === highlightedDate.getDate();
+            };
+
+            const isDragOver = (date) => {
+                if (!dragOverDate) return false;
+                return date.getFullYear() === dragOverDate.getFullYear() &&
+                    date.getMonth() === dragOverDate.getMonth() &&
+                    date.getDate() === dragOverDate.getDate();
             };
 
             const isOverdue = (date) => {
@@ -1056,10 +1262,13 @@
                             <div
                                 key={index}
                                 className={`calendar-day ${dayData
-                                    ? `${isToday(dayData.date) ? 'today' : ''} ${isHighlighted(dayData.date) ? 'highlighted' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''} clickable`
+                                    ? `${isToday(dayData.date) ? 'today' : ''} ${isHighlighted(dayData.date) ? 'highlighted' : ''} ${isDragOver(dayData.date) ? 'drag-over' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''} clickable`
                                     : 'empty'
                                     }`}
                                 onClick={() => dayData && handleDateClick(dayData.date)}
+                                onDragOver={(e) => dayData && handleDateDragOver(e, dayData.date)}
+                                onDragLeave={handleDateDragLeave}
+                                onDrop={(e) => dayData && handleDateDrop(e, dayData.date)}
                             >
                                 {dayData && (
                                     <>
@@ -1071,12 +1280,12 @@
                                                 <div
                                                     key={card.id}
                                                     className={`calendar-card priority-${card.priority || 'medium'} ${isOverdue(dayData.date) ? 'overdue' : ''
-                                                        }`}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onEditCard(card);
-                                                    }}
-                                                    title={`${card.title} (${card.listName})`}
+                                                        } ${draggedCard && draggedCard.id === card.id ? 'dragging' : ''}`}
+                                                    draggable
+                                                    onDragStart={(e) => handleCardDragStart(e, card)}
+                                                    onDragEnd={handleCardDragEnd}
+                                                    onClick={(e) => handleCardClick(e, card)}
+                                                    title={`${card.title} (${card.listName}) - Drag to move to another date`}
                                                 >
                                                     <div className="calendar-card-title">{card.title}</div>
                                                     <div className="calendar-card-list">{card.listName}</div>
@@ -1297,9 +1506,7 @@
             };
 
             const handleDelete = () => {
-                if (confirm('Are you sure you want to delete this card?')) {
-                    onDelete(card.id);
-                }
+                onDelete(card.id); // This will now trigger the custom confirmation
             };
 
             const handleOverlayClick = (e) => {
@@ -1478,6 +1685,47 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confirmText = "Yes", cancelText = "No", isDestructive = false }) {
+            if (!isOpen) return null;
+
+            const handleOverlayClick = (e) => {
+                if (e.target === e.currentTarget) {
+                    onCancel();
+                }
+            };
+
+            return (
+                <div className="modal-overlay" onClick={handleOverlayClick}>
+                    <div className="modal-content confirmation-modal">
+                        <div className="confirmation-header">
+                            <i className={`fas ${isDestructive ? 'fa-exclamation-triangle' : 'fa-question-circle'} confirmation-icon ${isDestructive ? 'destructive' : 'info'}`}></i>
+                            <h3>{title}</h3>
+                        </div>
+                        <div className="confirmation-message">
+                            {message}
+                        </div>
+                        <div className="modal-buttons">
+                            <button
+                                type="button"
+                                className={`confirmation-button ${isDestructive ? 'destructive' : 'primary'}`}
+                                onClick={onConfirm}
+                                autoFocus
+                            >
+                                {confirmText}
+                            </button>
+                            <button
+                                type="button"
+                                className="cancel-button"
+                                onClick={onCancel}
+                            >
+                                {cancelText}
+                            </button>
+                        </div>
                     </div>
                 </div>
             );

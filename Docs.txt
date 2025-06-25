@@ -11,7 +11,8 @@
     * Done: Fixing teh Droping action
     * Done: Adding Dark/Light mode
     * Done: Adding filters
-    * Dragable cards on Calendar view
+    * Done: Dragable cards on Calendar view
+    * Done: Adding the Confirmation models
 
 */
 
