@@ -530,12 +530,8 @@
                                 className={`filter-toggle-button ${showFilters ? 'active' : ''}`}
                                 onClick={toggleFilters}
                             >
-                                <i className={`fas ${showFilters ? 'fa-eye-slash' : 'fa-filter'}`}></i>
-                                {hasActiveFilters() && (
-                                    <span className="filtered-count">
-                                        <i className="fas fa-circle"></i>
-                                    </span>
-                                )}
+                                <i className={`fas ${showFilters ? 'fa-filter-circle-xmark' : 'fa-filter'}`}></i>
+                                
                             </button>
                             <div className="views">
                                 <button

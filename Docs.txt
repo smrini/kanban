@@ -10,7 +10,7 @@
     * Done: fixing the delete button on cards
     * Done: Fixing teh Droping action
     * Done: Adding Dark/Light mode
-    * Adding filters
+    * Done: Adding filters
     * Dragable cards on Calendar view
 
 */

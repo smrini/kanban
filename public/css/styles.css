@@ -195,6 +195,7 @@ button {
 	gap: 20px;
 	overflow-x: auto;
 	padding: 20px 0;
+	align-items: flex-start;
 }
 
 .list {
