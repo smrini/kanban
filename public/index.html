@@ -35,15 +35,40 @@
                 return dateString.split('T')[0];
             }
 
-            // If it's a Date object or other format, convert carefully
+            // If it's a Date object, handle it carefully
+            if (dateString instanceof Date) {
+                const year = dateString.getFullYear();
+                const month = String(dateString.getMonth() + 1).padStart(2, '0');
+                const day = String(dateString.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            // For other string formats, try to parse as local date
             try {
+                // If it looks like a date string from MySQL (YYYY-MM-DD), 
+                // create a date object in local timezone
+                if (typeof dateString === 'string') {
+                    const dateParts = dateString.split('-');
+                    if (dateParts.length === 3) {
+                        const year = parseInt(dateParts[0], 10);
+                        const month = parseInt(dateParts[1], 10) - 1; // Month is 0-based
+                        const day = parseInt(dateParts[2], 10);
+                        const date = new Date(year, month, day);
+
+                        const resultYear = date.getFullYear();
+                        const resultMonth = String(date.getMonth() + 1).padStart(2, '0');
+                        const resultDay = String(date.getDate()).padStart(2, '0');
+                        return `${resultYear}-${resultMonth}-${resultDay}`;
+                    }
+                }
+
+                // Fallback: try to parse as regular date
                 const date = new Date(dateString);
                 if (isNaN(date.getTime())) return '';
 
-                // Use UTC methods to avoid timezone issues
-                const year = date.getUTCFullYear();
-                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(date.getUTCDate()).padStart(2, '0');
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             } catch (error) {
                 console.error('Error formatting date:', error);
@@ -1023,6 +1048,7 @@
 
             // Get cards for a specific date - now uses filtered cards
             const getCardsForDate = (date) => {
+                // Use the same date formatting logic
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
@@ -1030,8 +1056,10 @@
 
                 return getAllCards().filter(card => {
                     if (!card.due_date) return false;
-                    // Direct string comparison - no timezone conversion
-                    const cardDateStr = card.due_date.split('T')[0]; // Handle both formats
+                    // Direct string comparison - extract just the date part
+                    const cardDateStr = card.due_date.includes('T')
+                        ? card.due_date.split('T')[0]
+                        : card.due_date;
                     return cardDateStr === dateStr;
                 });
             };
@@ -1146,10 +1174,13 @@
 
                 if (!draggedCard) return;
 
+                // Use the same date formatting logic as everywhere else
                 const year = targetDate.getFullYear();
                 const month = String(targetDate.getMonth() + 1).padStart(2, '0');
                 const day = String(targetDate.getDate()).padStart(2, '0');
                 const newDueDateStr = `${year}-${month}-${day}`;
+
+                console.log('Calendar drag drop - new date:', newDueDateStr); // Debug log
 
                 // Check if the date is actually different
                 const currentDueDateStr = draggedCard.due_date;
@@ -1583,12 +1614,26 @@
         function EditCardModal({ card, onSave, onDelete, onClose }) {
             const [title, setTitle] = useState(card.title);
             const [description, setDescription] = useState(card.description || '');
-            const [dueDate, setDueDate] = useState(formatDateForInput(card.due_date) || '');
+
+            // Fix: Handle the date more carefully
+            const [dueDate, setDueDate] = useState(() => {
+                if (!card.due_date) return '';
+
+                // If it's already in YYYY-MM-DD format, use it directly
+                if (typeof card.due_date === 'string' && card.due_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    return card.due_date;
+                }
+
+                // Otherwise, format it properly
+                return formatDateForInput(card.due_date);
+            });
+
             const [priority, setPriority] = useState(card.priority || 'medium');
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (title.trim()) {
+                    console.log('EditCardModal - saving with date:', dueDate);
                     onSave(card.id, title.trim(), description.trim(), dueDate, priority);
                 }
             };
@@ -1627,7 +1672,10 @@
                                     <input
                                         type="date"
                                         value={dueDate}
-                                        onChange={(e) => setDueDate(e.target.value)}
+                                        onChange={(e) => {
+                                            console.log('Date input changed to:', e.target.value);
+                                            setDueDate(e.target.value);
+                                        }}
                                         className="modal-input"
                                     />
                                 </div>
@@ -1681,7 +1729,7 @@
             };
 
             const formatDateForInput = (date) => {
-                // Use local date methods to avoid timezone issues
+                // IMPORTANT: Use local date methods to avoid timezone conversion
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
@@ -1692,6 +1740,9 @@
                 e.preventDefault();
                 if (title.trim() && selectedList) {
                     const dueDate = formatDateForInput(selectedDate);
+                    console.log('Calendar modal - selectedDate:', selectedDate);
+                    console.log('Calendar modal - formatted dueDate:', dueDate);
+
                     await onSave(parseInt(selectedList), title.trim(), description.trim(), dueDate, priority);
                     onClose();
                 }

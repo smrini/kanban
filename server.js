@@ -185,7 +185,54 @@ app.get("/api/boards/:id", (req, res) => {
 								[list.id],
 								(err, cards) => {
 									if (err) reject(err);
-									else resolve({ ...list, cards });
+									else {
+										// Fix: Format dates properly to avoid timezone issues
+										const formattedCards = cards.map(
+											(card) => {
+												let formattedDueDate = null;
+
+												if (card.due_date) {
+													if (
+														card.due_date instanceof
+														Date
+													) {
+														// Format date as YYYY-MM-DD using local timezone
+														const year =
+															card.due_date.getFullYear();
+														const month = String(
+															card.due_date.getMonth() +
+																1
+														).padStart(2, "0");
+														const day = String(
+															card.due_date.getDate()
+														).padStart(2, "0");
+														formattedDueDate = `${year}-${month}-${day}`;
+													} else if (
+														typeof card.due_date ===
+														"string"
+													) {
+														// If it's already a string, ensure it's in YYYY-MM-DD format
+														formattedDueDate =
+															card.due_date.split(
+																"T"
+															)[0];
+													} else {
+														formattedDueDate =
+															card.due_date;
+													}
+												}
+
+												return {
+													...card,
+													due_date: formattedDueDate,
+												};
+											}
+										);
+										resolve({
+											...list,
+											cards: formattedCards,
+										});
+									}
 								}
 							);
 						});
@@ -261,6 +308,14 @@ app.post("/api/lists", (req, res) => {
 app.post("/api/cards", (req, res) => {
 	const { list_id, title, description, due_date, priority } = req.body;
 
+	console.log("Received card creation request:", {
+		list_id,
+		title,
+		description,
+		due_date,
+		priority,
+	});
+
 	// Get the next position
 	db.query(
 		"SELECT COALESCE(MAX(position), -1) + 1 as nextPos FROM cards WHERE list_id = ?",
@@ -275,15 +330,28 @@ app.post("/api/cards", (req, res) => {
 
 			// Handle date properly - ensure it stays as the same date
 			let formattedDate = null;
-			if (due_date) {
+			if (due_date && due_date.trim() !== "") {
 				// Always ensure we're working with YYYY-MM-DD format only
 				if (typeof due_date === "string") {
 					// Extract just the date part, ignoring any time or timezone info
 					formattedDate = due_date.split("T")[0];
+
+					// Validate the date format
+					if (!formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+						console.error(
+							"Invalid date format received:",
+							due_date
+						);
+						res.status(400).json({ error: "Invalid date format" });
+						return;
+					}
 				} else {
 					formattedDate = due_date;
 				}
 			}
+
+			console.log("Original due_date:", due_date);
+			console.log("Formatted date for storage:", formattedDate);
 
 			db.query(
 				"INSERT INTO cards (list_id, title, description, position, priority, due_date) VALUES (?, ?, ?, ?, ?, ?)",
@@ -297,10 +365,12 @@ app.post("/api/cards", (req, res) => {
 				],
 				function (err, result) {
 					if (err) {
+						console.error("Database error:", err);
 						res.status(500).json({ error: err.message });
 						return;
 					}
-					res.json({
+
+					const responseData = {
 						id: result.insertId,
 						list_id,
 						title,
@@ -308,7 +378,10 @@ app.post("/api/cards", (req, res) => {
 						position,
 						priority: priority || "medium",
 						due_date: formattedDate, // Return the same format we stored
-					});
+					};
+
+					console.log("Returning card data:", responseData);
+					res.json(responseData);
 				}
 			);
 		}
@@ -464,6 +537,8 @@ app.put("/api/cards/:id", (req, res) => {
 	const cardId = req.params.id;
 	const updates = req.body;
 
+	console.log("Received card update request:", { cardId, updates });
+
 	// Get current card data first
 	db.query("SELECT * FROM cards WHERE id = ?", [cardId], (err, results) => {
 		if (err) {
@@ -478,6 +553,7 @@ app.put("/api/cards/:id", (req, res) => {
 		}
 
 		const currentCard = results[0];
+		console.log("Current card data:", currentCard);
 
 		// Merge current data with updates
 		const updatedData = {
@@ -499,15 +575,28 @@ app.put("/api/cards/:id", (req, res) => {
 
 		// Handle date properly - ensure it stays as the same date
 		let formattedDate = null;
-		if (updatedData.due_date) {
+		if (updatedData.due_date && updatedData.due_date.trim() !== "") {
 			// Always ensure we're working with YYYY-MM-DD format only
 			if (typeof updatedData.due_date === "string") {
 				// Extract just the date part, ignoring any time or timezone info
 				formattedDate = updatedData.due_date.split("T")[0];
+
+				// Validate the date format
+				if (!formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+					console.error(
+						"Invalid date format received:",
+						updatedData.due_date
+					);
+					res.status(400).json({ error: "Invalid date format" });
+					return;
+				}
 			} else {
 				formattedDate = updatedData.due_date;
 			}
 		}
+
+		console.log("Original due_date:", updatedData.due_date);
+		console.log("Formatted date for storage:", formattedDate);
 
 		db.query(
 			"UPDATE cards SET title = ?, description = ?, priority = ?, due_date = ? WHERE id = ?",
@@ -524,6 +613,11 @@ app.put("/api/cards/:id", (req, res) => {
 					res.status(500).json({ error: err.message });
 					return;
 				}
+
+				console.log(
+					"Card updated successfully with date:",
+					formattedDate
+				);
 				res.json({
 					success: true,
 					due_date: formattedDate, // Return the formatted date
