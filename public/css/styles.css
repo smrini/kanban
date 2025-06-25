@@ -1536,7 +1536,7 @@ button {
 }
 
 [data-theme="dark"] .confirmation-message {
-	color: var(--text-secondary);
+	color: var(--text-primary);
 }
 
 /* Animation for confirmation modal */
