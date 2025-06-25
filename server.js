@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
@@ -5,26 +7,34 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || 'localhost';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Database path based on environment
+const DB_PATH = NODE_ENV === 'production' 
+  ? process.env.PROD_DB_PATH || './kanban.db'
+  : process.env.DB_PATH || './kanban.db';
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'],
+  credentials: process.env.CORS_CREDENTIALS === 'true',
+  optionsSuccessStatus: 200
+};
 
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.static("public"));
-app.use(
-	"/fontawesome",
-	express.static(
-		path.join(__dirname, "node_modules/@fortawesome/fontawesome-free")
-	)
-);
 
 // Initialize SQLite database
-const db = new sqlite3.Database("./kanban.db", (err) => {
-	if (err) {
-		console.error("Error opening database:", err.message);
-	} else {
-		console.log("Connected to SQLite database");
-		initializeDatabase();
-	}
+const db = new sqlite3.Database(DB_PATH, (err) => {
+  if (err) {
+    console.error("Error opening database:", err.message);
+  } else {
+    console.log(`Connected to SQLite database at ${DB_PATH}`);
+    initializeDatabase();
+  }
 });
 
 // Initialize database tables
@@ -571,8 +581,8 @@ app.delete("/api/lists/:id", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-	console.log(`Kanban server running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Kanban server running on ${HOST}:${PORT} in ${NODE_ENV} mode`);
 });
 
 // Graceful shutdown
