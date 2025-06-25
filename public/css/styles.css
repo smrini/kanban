@@ -1133,6 +1133,7 @@ button {
 	align-items: center;
 	gap: 6px;
 	color: #667eea;
+	margin-left: 10px;
 	font-size: 13px;
 	font-weight: 600;
 	background: rgba(102, 126, 234, 0.1);
