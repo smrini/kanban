@@ -1,18 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ca">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kanban Board</title>
+    <title>Tauler Kanban</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="shortcut icon" href="assets/icons/home.png">
     <link rel="stylesheet" href="/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
-
-
 </head>
 
 <body>
@@ -271,11 +269,10 @@
                 const card = board.lists.flatMap(list => list.cards).find(c => c.id === cardId);
 
                 showConfirmation({
-                    title: 'Delete Card',
-                    message: `Are you sure you want to delete "${card?.title}"?\n
-                    This action cannot be undone.`,
-                    confirmText: 'Delete Card',
-                    cancelText: 'Cancel',
+                    title: 'Eliminar Targeta',
+                    message: `Esteu segur que voleu eliminar "${card?.title}"?\nAquesta acció no es pot desfer.`,
+                    confirmText: 'Eliminar Targeta',
+                    cancelText: 'Cancel·lar',
                     isDestructive: true,
                     onConfirm: async () => {
                         try {
@@ -292,7 +289,7 @@
                             }));
                             setEditingCard(null);
                         } catch (err) {
-                            setError('Failed to delete card');
+                            setError('Error en eliminar la targeta');
                         }
                     }
                 });
@@ -303,9 +300,10 @@
                 const cardCount = list?.cards?.length || 0;
 
                 showConfirmation({
-                    title: 'Delete List',
-                    message: `Are you sure you want to delete "${list?.title}"?${cardCount > 0 ? `\nThis will also delete ${cardCount} card${cardCount === 1 ? '' : 's'}.` : ''}\nThis action cannot be undone.`, confirmText: 'Delete List',
-                    cancelText: 'Cancel',
+                    title: 'Eliminar Llista',
+                    message: `Esteu segur que voleu eliminar "${list?.title}"?${cardCount > 0 ? `\nAixò també eliminarà ${cardCount} targeta${cardCount === 1 ? '' : 's'}.` : ''}\nAquesta acció no es pot desfer.`,
+                    confirmText: 'Eliminar Llista',
+                    cancelText: 'Cancel·lar',
                     isDestructive: true,
                     onConfirm: async () => {
                         try {
@@ -318,7 +316,7 @@
                                 lists: prev.lists.filter(list => list.id !== listId)
                             }));
                         } catch (err) {
-                            setError('Failed to delete list');
+                            setError('Error en eliminar la llista');
                         }
                     }
                 });
@@ -594,20 +592,20 @@
                 return filterCards(allCards).length;
             };
 
-            if (loading) return <div className="loading">Loading your Kanban board...</div>;
+            if (loading) return <div className="loading">Carregant el vostre tauler Kanban...</div>;
             if (error) return <div className="error">{error}</div>;
-            if (!board) return <div className="loading">No board found</div>;
+            if (!board) return <div className="loading">No s'ha trobat cap tauler</div>;
 
             return (
                 <div className="app">
                     <div className="header">
-                        <h1>Kanban Board</h1>
+                        <h1>Tauler Kanban</h1>
                     </div>
 
                     <div className="action-bar">
                         <button className="add-list-button" onClick={() => setShowAddList(true)}>
                             <i className="fas fa-plus"></i>
-                            Add List
+                            Afegir Llista
                         </button>
                         <div className="action-bar-right">
                             <button
@@ -615,7 +613,6 @@
                                 onClick={toggleFilters}
                             >
                                 <i className={`fas ${showFilters ? 'fa-filter-circle-xmark' : 'fa-filter'}`}></i>
-
                             </button>
                             <div className="views">
                                 <button
@@ -634,22 +631,12 @@
                             <button
                                 className="theme-toggle-button"
                                 onClick={toggleTheme}
-                                title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+                                title={`Canviar a mode ${theme === 'light' ? 'fosc' : 'clar'}`}
                             >
                                 <i className={`fas ${theme === 'light' ? 'fa-moon' : 'fa-sun'}`}></i>
                             </button>
                         </div>
                     </div>
-
-                    {currentView === 'calendar' && (
-                        <CalendarView
-                            board={board}
-                            filters={filters}
-                            onEditCard={(card) => setEditingCard(card)}
-                            onAddCard={addCard}
-                            onUpdateCard={updateCardInBoard} // Pass the update function
-                        />
-                    )}
 
                     {showFilters && (
                         <FilterBar
@@ -659,6 +646,16 @@
                             hasActiveFilters={hasActiveFilters()}
                             filteredCount={getFilteredCardsCount()}
                             totalCount={board.lists.flatMap(list => list.cards).length}
+                        />
+                    )}
+
+                    {currentView === 'calendar' && (
+                        <CalendarView
+                            board={board}
+                            filters={filters}
+                            onEditCard={(card) => setEditingCard(card)}
+                            onAddCard={addCard}
+                            onUpdateCard={updateCardInBoard} // Pass the update function
                         />
                     )}
 
@@ -808,7 +805,7 @@
                             <i className="fas fa-search"></i>
                             <input
                                 type="text"
-                                placeholder="Search cards..."
+                                placeholder="Cercar targetes..."
                                 value={filters.search}
                                 onChange={(e) => updateFilter('search', e.target.value)}
                                 className="filter-input"
@@ -822,11 +819,11 @@
                                 onChange={(e) => updateFilter('priority', e.target.value)}
                                 className="filter-select"
                             >
-                                <option value="all">All Priorities</option>
-                                <option value="low">Low Priority</option>
-                                <option value="medium">Medium Priority</option>
-                                <option value="high">High Priority</option>
-                                <option value="urgent">Urgent Priority</option>
+                                <option value="all">Totes les Prioritats</option>
+                                <option value="low">Prioritat Baixa</option>
+                                <option value="medium">Prioritat Mitjana</option>
+                                <option value="high">Prioritat Alta</option>
+                                <option value="urgent">Prioritat Urgent</option>
                             </select>
                         </div>
 
@@ -837,11 +834,11 @@
                                 onChange={(e) => updateFilter('dueDate', e.target.value)}
                                 className="filter-select"
                             >
-                                <option value="all">All Due Dates</option>
-                                <option value="overdue">Overdue</option>
-                                <option value="today">Due Today</option>
-                                <option value="upcoming">Due This Week</option>
-                                <option value="no-date">No Due Date</option>
+                                <option value="all">Totes les Dates Límit</option>
+                                <option value="overdue">Vençudes</option>
+                                <option value="today">Vencen Avui</option>
+                                <option value="upcoming">Vencen Aquesta Setmana</option>
+                                <option value="no-date">Sense Data Límit</option>
                             </select>
                         </div>
 
@@ -849,14 +846,14 @@
                             {hasActiveFilters && (
                                 <div className="filtered-count">
                                     <i className="fas fa-filter"></i>
-                                    {filteredCount} of {totalCount} cards
+                                    {filteredCount} de {totalCount} targetes
                                 </div>
                             )}
 
                             {hasActiveFilters && (
                                 <div className="filter-indicator">
                                     <i className="fas fa-check-circle"></i>
-                                    Filters Active
+                                    Filtres Actius
                                 </div>
                             )}
                         </div>
@@ -865,10 +862,10 @@
                             <button
                                 className="clear-filters-button"
                                 onClick={onClearFilters}
-                                title="Clear all filters"
+                                title="Netejar tots els filtres"
                             >
                                 <i className="fas fa-times"></i>
-                                Clear Filters
+                                Netejar Filtres
                             </button>
                         )}
                     </div>
@@ -1148,11 +1145,11 @@
             };
 
             const monthNames = [
-                'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'
+                'Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny',
+                'Juliol', 'Agost', 'Setembre', 'Octubre', 'Novembre', 'Desembre'
             ];
 
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dayNames = ['Dg', 'Dl', 'Dt', 'Dc', 'Dj', 'Dv', 'Ds'];
 
             // Modified calendar rendering to show filter status
             return (
@@ -1170,7 +1167,7 @@
                                 {(filters.search || filters.priority !== 'all' || filters.dueDate !== 'all') && (
                                     <span className="filter-indicator">
                                         <i className="fas fa-filter"></i>
-                                        Filtered
+                                        Filtrat
                                     </span>
                                 )}
                             </h2>
@@ -1186,10 +1183,10 @@
                             <button
                                 className="calendar-control-button"
                                 onClick={goToToday}
-                                title="Go to Today"
+                                title="Anar a Avui"
                             >
                                 <i className="fas fa-calendar-day"></i>
-                                Today
+                                Avui
                             </button>
 
                             <div className="go-to-date-container">
@@ -1213,7 +1210,7 @@
                                             className="go-button"
                                             onClick={() => goToDate(goToDateValue)}
                                         >
-                                            Go
+                                            Anar
                                         </button>
                                         <button
                                             className="cancel-go-button"
@@ -1229,10 +1226,10 @@
                                     <button
                                         className="calendar-control-button"
                                         onClick={() => setShowGoToDate(true)}
-                                        title="Go to Specific Date"
+                                        title="Anar a Data Específica"
                                     >
                                         <i className="fas fa-search"></i>
-                                        Go to Date
+                                        Anar a Data
                                     </button>
                                 )}
                             </div>
@@ -1243,10 +1240,10 @@
                                     setSelectedDateForTask(new Date());
                                     setShowAddTaskModal(true);
                                 }}
-                                title="Add New Task"
+                                title="Afegir Nova Tasca"
                             >
                                 <i className="fas fa-plus"></i>
-                                Add Task
+                                Afegir Tasca
                             </button>
                         </div>
                     </div>
@@ -1345,11 +1342,11 @@
             return (
                 <div className="modal-overlay" onClick={handleOverlayClick}>
                     <div className="modal-content">
-                        <h3>Add New List</h3>
+                        <h3>Afegir Nova Llista</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
                             <input
                                 type="text"
-                                placeholder="List title"
+                                placeholder="Títol de la llista"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 autoFocus
@@ -1358,10 +1355,10 @@
                             <div className="modal-buttons">
                                 <button type="submit" className="save-button">
                                     <i className="fa-solid fa-plus"></i>
-                                    Add List
+                                    Afegir Llista
                                 </button>
                                 <button type="button" className="cancel-button" onClick={onClose}>
-                                    Cancel
+                                    Cancel·lar
                                 </button>
                             </div>
                         </form>
@@ -1437,25 +1434,25 @@
             return (
                 <div className="modal-overlay" onClick={handleOverlayClick}>
                     <div className="modal-content wide">
-                        <h3>Add New Card</h3>
+                        <h3>Afegir Nova Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
                             <input
                                 type="text"
-                                placeholder="Card title"
+                                placeholder="Títol de la targeta"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 autoFocus
                                 className="modal-input"
                             />
                             <textarea
-                                placeholder="Card description (optional)"
+                                placeholder="Descripció de la targeta (opcional)"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 className="modal-textarea"
                             />
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Due Date:</label>
+                                    <label>Data Límit:</label>
                                     <input
                                         type="date"
                                         value={dueDate}
@@ -1464,15 +1461,15 @@
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Priority:</label>
+                                    <label>Prioritat:</label>
                                     <select
                                         value={priority}
                                         onChange={(e) => setPriority(e.target.value)}
                                         className="modal-select"
                                     >
-                                        <option value="low">Low</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="high">High</option>
+                                        <option value="low">Baixa</option>
+                                        <option value="medium">Mitjana</option>
+                                        <option value="high">Alta</option>
                                         <option value="urgent">Urgent</option>
                                     </select>
                                 </div>
@@ -1480,10 +1477,10 @@
                             <div className="modal-buttons">
                                 <button type="submit" className="save-button">
                                     <i className="fa-solid fa-plus"></i>
-                                    Add Card
+                                    Afegir Targeta
                                 </button>
                                 <button type="button" className="cancel-button" onClick={onClose}>
-                                    Cancel
+                                    Cancel·lar
                                 </button>
                             </div>
                         </form>
@@ -1506,7 +1503,7 @@
             };
 
             const handleDelete = () => {
-                onDelete(card.id); // This will now trigger the custom confirmation
+                onDelete(card.id);
             };
 
             const handleOverlayClick = (e) => {
@@ -1518,24 +1515,24 @@
             return (
                 <div className="modal-overlay" onClick={handleOverlayClick}>
                     <div className="modal-content wide">
-                        <h3>Edit Card</h3>
+                        <h3>Editar Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
                             <input
                                 type="text"
-                                placeholder="Card title"
+                                placeholder="Títol de la targeta"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 className="modal-input"
                             />
                             <textarea
-                                placeholder="Card description"
+                                placeholder="Descripció de la targeta"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 className="modal-textarea"
                             />
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Due Date:</label>
+                                    <label>Data Límit:</label>
                                     <input
                                         type="date"
                                         value={dueDate}
@@ -1544,15 +1541,15 @@
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Priority:</label>
+                                    <label>Prioritat:</label>
                                     <select
                                         value={priority}
                                         onChange={(e) => setPriority(e.target.value)}
                                         className="modal-select"
                                     >
-                                        <option value="low">Low</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="high">High</option>
+                                        <option value="low">Baixa</option>
+                                        <option value="medium">Mitjana</option>
+                                        <option value="high">Alta</option>
                                         <option value="urgent">Urgent</option>
                                     </select>
                                 </div>
@@ -1560,14 +1557,14 @@
                             <div className="modal-buttons">
                                 <button type="submit" className="save-button">
                                     <i className="fas fa-save"></i>
-                                    Save
+                                    Desar
                                 </button>
                                 <button type="button" className="delete-button" onClick={handleDelete}>
                                     <i className="fas fa-trash"></i>
-                                    Delete
+                                    Eliminar
                                 </button>
                                 <button type="button" className="cancel-button" onClick={onClose}>
-                                    Cancel
+                                    Cancel·lar
                                 </button>
                             </div>
                         </form>
@@ -1583,7 +1580,7 @@
             const [priority, setPriority] = useState('medium');
 
             const formatDateForDisplay = (date) => {
-                return date.toLocaleDateString('en-US', {
+                return date.toLocaleDateString('ca-ES', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
@@ -1602,11 +1599,7 @@
                 e.preventDefault();
                 if (title.trim() && selectedList) {
                     const dueDate = formatDateForInput(selectedDate);
-
-                    // Call onSave and wait for it to complete
                     await onSave(parseInt(selectedList), title.trim(), description.trim(), dueDate, priority);
-
-                    // Close the modal after successful save
                     onClose();
                 }
             };
@@ -1620,10 +1613,10 @@
             return (
                 <div className="modal-overlay" onClick={handleOverlayClick}>
                     <div className="modal-content wide">
-                        <h3>Add Task for {formatDateForDisplay(selectedDate)}</h3>
+                        <h3>Afegir Tasca per {formatDateForDisplay(selectedDate)}</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
                             <div className="form-group">
-                                <label>List:</label>
+                                <label>Llista:</label>
                                 <select
                                     value={selectedList}
                                     onChange={(e) => setSelectedList(e.target.value)}
@@ -1639,10 +1632,10 @@
                             </div>
 
                             <div className="form-group">
-                                <label>Task Title:</label>
+                                <label>Títol de la Tasca:</label>
                                 <input
                                     type="text"
-                                    placeholder="Enter task title"
+                                    placeholder="Introduïu el títol de la tasca"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     autoFocus
@@ -1652,9 +1645,9 @@
                             </div>
 
                             <div className="form-group">
-                                <label>Description:</label>
+                                <label>Descripció:</label>
                                 <textarea
-                                    placeholder="Task description (optional)"
+                                    placeholder="Descripció de la tasca (opcional)"
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
                                     className="modal-textarea"
@@ -1662,15 +1655,15 @@
                             </div>
 
                             <div className="form-group">
-                                <label>Priority:</label>
+                                <label>Prioritat:</label>
                                 <select
                                     value={priority}
                                     onChange={(e) => setPriority(e.target.value)}
                                     className="modal-select"
                                 >
-                                    <option value="low">Low</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="high">High</option>
+                                    <option value="low">Baixa</option>
+                                    <option value="medium">Mitjana</option>
+                                    <option value="high">Alta</option>
                                     <option value="urgent">Urgent</option>
                                 </select>
                             </div>
@@ -1678,10 +1671,10 @@
                             <div className="modal-buttons">
                                 <button type="submit" className="save-button">
                                     <i className="fas fa-plus"></i>
-                                    Add Task
+                                    Afegir Tasca
                                 </button>
                                 <button type="button" className="cancel-button" onClick={onClose}>
-                                    Cancel
+                                    Cancel·lar
                                 </button>
                             </div>
                         </form>
@@ -1690,7 +1683,7 @@
             );
         }
 
-        function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confirmText = "Yes", cancelText = "No", isDestructive = false }) {
+        function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confirmText = "Sí", cancelText = "No", isDestructive = false }) {
             if (!isOpen) return null;
 
             const handleOverlayClick = (e) => {
