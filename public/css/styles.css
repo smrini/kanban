@@ -29,7 +29,7 @@
 	--bg-tertiary: #2d3748;
 	--bg-card: #4a5568;
 	--text-primary: #e2e8f0;
-	--text-secondary: #cbd5e0;
+	--text-secondary: #32373d;
 	--text-muted: #a0aec0;
 	--border-color: #4a5568;
 	--border-input: #718096;
@@ -40,7 +40,7 @@
 	--calendar-empty: #2d3748;
 	--calendar-today: #2c5282;
 	--calendar-today-border: #3182ce;
-	--calendar-has-cards: #744210;
+	--calendar-has-cards: #43577d;
 	--calendar-hover: #4a5568;
 	--calendar-clickable-hover: #2c5282;
 	--modal-overlay: rgba(0, 0, 0, 0.7);
@@ -60,9 +60,10 @@ body {
 	transition: background 0.3s ease;
 }
 
-i {
+/* i {
 	padding-right: 5px;
 }
+*/
 
 input,
 textarea,
@@ -133,11 +134,6 @@ button {
 	padding: 5px;
 	border-radius: 10px;
 	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.views i {
-	margin: 0;
-	padding: 0;
 }
 
 .views button {
@@ -316,6 +312,7 @@ button {
 	color: var(--text-secondary);
 	font-size: 14px;
 	line-height: 1.4;
+	font-weight: 500;
 	margin-bottom: 10px;
 	transition: color 0.3s ease;
 }
@@ -439,7 +436,7 @@ button {
 	font-size: 14px;
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 7px;
 }
 
 .delete-button:hover {
@@ -590,7 +587,7 @@ button {
 	cursor: pointer;
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 7px;
 	transition: all 0.2s ease;
 }
 
@@ -669,7 +666,7 @@ button {
 	transition: background 0.2s;
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 7px;
 	white-space: nowrap;
 }
 
@@ -823,11 +820,6 @@ button {
 	transition: opacity 0.2s;
 }
 
-.calendar-day-add i {
-	margin: 0;
-	padding: 0;
-}
-
 .calendar-day:hover .calendar-day-add {
 	opacity: 1;
 }
@@ -876,8 +868,7 @@ button {
 }
 
 [data-theme="dark"] .calendar-card.overdue {
-	background: #742a2a;
-	border-left-color: #f44336;
+	background: #852626;
 }
 
 .calendar-card.priority-low {
@@ -965,8 +956,6 @@ button {
     color: #667eea;
     font-size: 16px;
     width: 16px;
-    margin: 0;
-    padding: 0;
 }
 
 .filter-input {
@@ -1083,13 +1072,12 @@ button {
     background: #17a2b8;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 10px 15px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
     display: flex;
     align-items: center;
-    gap: 8px;
     transition: all 0.3s ease;
 }
 
@@ -1273,4 +1261,81 @@ button {
 .modal-textarea:focus::placeholder {
 	opacity: 0.5;
 	transition: opacity 0.2s ease;
+}
+
+.calendar-day.highlighted {
+    background: linear-gradient(135deg, #e3f2fd, #f0f8ff) !important;
+    border: 2px solid #2196f3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+    position: relative;
+    z-index: 5;
+    animation: subtle-highlight 1s ease-out;
+}
+
+.calendar-day.highlighted .calendar-day-number {
+    color: #1976d2;
+    font-weight: bold;
+}
+
+.calendar-day.highlighted .calendar-card-title {
+    color: #333 !important;
+}
+
+.calendar-day.highlighted .calendar-card-list {
+    color: #666 !important;
+}
+
+@keyframes subtle-highlight {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.2);
+    }
+    25% {
+        transform: scale(1.01);
+        box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.4);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.4);
+    }
+    75% {
+        transform: scale(1.01);
+        box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.2);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+    }
+}
+
+/* Dark theme highlighting */
+[data-theme="dark"] .calendar-day.highlighted {
+    background: linear-gradient(135deg, #1e3a8a, #1e40af) !important;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .calendar-day.highlighted .calendar-day-number {
+    color: #93c5fd;
+    font-weight: bold;
+}
+
+/* Handle case when highlighted day is also today */
+.calendar-day.today.highlighted {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb) !important;
+    border: 2px solid #2196f3;
+}
+
+[data-theme="dark"] .calendar-day.today.highlighted {
+    background: linear-gradient(135deg, #1e3a8a, #2563eb) !important;
+    border-color: #3b82f6;
+}
+
+/* Ensure highlighted state overrides other states */
+.calendar-day.highlighted.has-cards {
+    background: linear-gradient(135deg, #e3f2fd, #f0f8ff) !important;
+}
+
+[data-theme="dark"] .calendar-day.highlighted.has-cards {
+    background: linear-gradient(135deg, #1e3a8a, #1e40af) !important;
 }

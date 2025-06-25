@@ -531,7 +531,7 @@
                                 onClick={toggleFilters}
                             >
                                 <i className={`fas ${showFilters ? 'fa-filter-circle-xmark' : 'fa-filter'}`}></i>
-                                
+
                             </button>
                             <div className="views">
                                 <button
@@ -786,6 +786,7 @@
             const [goToDateValue, setGoToDateValue] = useState('');
             const [showAddTaskModal, setShowAddTaskModal] = useState(false);
             const [selectedDateForTask, setSelectedDateForTask] = useState(null);
+            const [highlightedDate, setHighlightedDate] = useState(null);
 
             // Get all cards with due dates and apply filters
             const getAllCards = () => {
@@ -892,8 +893,14 @@
                 if (isNaN(date.getTime())) return;
 
                 setCurrentDate(date);
+                setHighlightedDate(date); // Set the highlighted date
                 setGoToDateValue('');
                 setShowGoToDate(false);
+
+                // Clear highlight after 3 seconds
+                setTimeout(() => {
+                    setHighlightedDate(null);
+                }, 3000);
             };
 
             const goToToday = () => {
@@ -918,6 +925,13 @@
                 return date.getFullYear() === today.getFullYear() &&
                     date.getMonth() === today.getMonth() &&
                     date.getDate() === today.getDate();
+            };
+
+            const isHighlighted = (date) => {
+                if (!highlightedDate) return false;
+                return date.getFullYear() === highlightedDate.getFullYear() &&
+                    date.getMonth() === highlightedDate.getMonth() &&
+                    date.getDate() === highlightedDate.getDate();
             };
 
             const isOverdue = (date) => {
@@ -1042,7 +1056,7 @@
                             <div
                                 key={index}
                                 className={`calendar-day ${dayData
-                                    ? `${isToday(dayData.date) ? 'today' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''} clickable`
+                                    ? `${isToday(dayData.date) ? 'today' : ''} ${isHighlighted(dayData.date) ? 'highlighted' : ''} ${dayData.cards.length > 0 ? 'has-cards' : ''} clickable`
                                     : 'empty'
                                     }`}
                                 onClick={() => dayData && handleDateClick(dayData.date)}
