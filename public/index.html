@@ -19,7 +19,60 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // API base URL
         const API_BASE = 'http://localhost:3001/api';
+
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+
+            // If it's already in YYYY-MM-DD format, return as is
+            if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateString;
+            }
+
+            // If it contains 'T' (ISO format), extract just the date part
+            if (typeof dateString === 'string' && dateString.includes('T')) {
+                return dateString.split('T')[0];
+            }
+
+            // If it's a Date object or other format, convert carefully
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) return '';
+
+                // Use UTC methods to avoid timezone issues
+                const year = date.getUTCFullYear();
+                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(date.getUTCDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            } catch (error) {
+                console.error('Error formatting date:', error);
+                return '';
+            }
+        };
+
+        const formatDateForDisplay = (dateString) => {
+            if (!dateString) return '';
+
+            try {
+                // If it's in YYYY-MM-DD format, create date object carefully
+                if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
+                    // Create date object in local timezone
+                    const date = new Date(year, month - 1, day);
+                    return date.toLocaleDateString('ca-ES');
+                }
+
+                // Handle other formats
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) return dateString;
+
+                return date.toLocaleDateString('ca-ES');
+            } catch (error) {
+                console.error('Error displaying date:', error);
+                return dateString;
+            }
+        };
 
         function KanbanBoard() {
             const [board, setBoard] = useState(null);
@@ -46,7 +99,7 @@
                 title: '',
                 message: '',
                 onConfirm: null,
-                confirmText: 'Yes',
+                confirmText: 'Sí',
                 cancelText: 'No',
                 isDestructive: false
             });
@@ -115,17 +168,35 @@
 
             const fetchBoard = async () => {
                 try {
+                    console.log('Fetching boards from:', `${API_BASE}/boards`);
                     const response = await fetch(`${API_BASE}/boards`);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
                     const boards = await response.json();
+                    console.log('Boards received:', boards);
 
                     if (boards.length > 0) {
+                        console.log('Fetching board data for board ID:', boards[0].id);
                         const boardResponse = await fetch(`${API_BASE}/boards/${boards[0].id}`);
+
+                        if (!boardResponse.ok) {
+                            throw new Error(`HTTP error! status: ${boardResponse.status}`);
+                        }
+
                         const boardData = await boardResponse.json();
+                        console.log('Board data received:', boardData);
                         setBoard(boardData);
+                    } else {
+                        console.log('No boards found');
+                        setError('No s\'ha trobat cap tauler');
                     }
                     setLoading(false);
                 } catch (err) {
-                    setError('Failed to fetch board data');
+                    console.error('Error fetching board:', err);
+                    setError(`No s'ha pogut carregar el tauler: ${err.message}`);
                     setLoading(false);
                 }
             };
@@ -221,7 +292,7 @@
 
             const updateCard = async (cardId, title, description, dueDate, priority) => {
                 try {
-                    await fetch(`${API_BASE}/cards/${cardId}`, {
+                    const response = await fetch(`${API_BASE}/cards/${cardId}`, {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json'
@@ -234,6 +305,11 @@
                         })
                     });
 
+                    if (!response.ok) {
+                        throw new Error('Failed to update card');
+                    }
+
+                    // Update the board state with the exact date we sent
                     setBoard(prev => ({
                         ...prev,
                         lists: prev.lists.map(list => ({
@@ -247,7 +323,8 @@
                     }));
                     setEditingCard(null);
                 } catch (err) {
-                    setError('Failed to update card');
+                    console.error('Error updating card:', err);
+                    setError('Error en actualitzar la targeta');
                 }
             };
 
@@ -655,7 +732,7 @@
                             filters={filters}
                             onEditCard={(card) => setEditingCard(card)}
                             onAddCard={addCard}
-                            onUpdateCard={updateCardInBoard} // Pass the update function
+                            onUpdateCard={updateCardInBoard}
                         />
                     )}
 
@@ -728,9 +805,19 @@
                                                 )}
                                                 <div className="card-meta">
                                                     {card.due_date && (
-                                                        <div className={`card-due-date ${new Date(card.due_date + 'T00:00:00') < new Date() ? 'overdue' : ''}`}>
+                                                        <div className={`card-due-date ${(() => {
+                                                            const today = new Date();
+                                                            today.setHours(0, 0, 0, 0);
+
+                                                            // Parse the card date carefully
+                                                            const [year, month, day] = card.due_date.split('-').map(num => parseInt(num, 10));
+                                                            const cardDate = new Date(year, month - 1, day);
+                                                            cardDate.setHours(0, 0, 0, 0);
+
+                                                            return cardDate < today ? 'overdue' : '';
+                                                        })()}`}>
                                                             <i className="fas fa-calendar"></i>
-                                                            {new Date(card.due_date + 'T00:00:00').toLocaleDateString()}
+                                                            {formatDateForDisplay(card.due_date)}
                                                         </div>
                                                     )}
                                                     <div className={`card-priority priority-${card.priority || 'medium'}`}>
@@ -747,7 +834,7 @@
                                         onClick={() => setShowAddCard(list.id)}
                                     >
                                         <i className="fas fa-plus"></i>
-                                        Add Card
+                                        Afegir Targeta
                                     </button>
                                 </div>
                             ))}
@@ -943,7 +1030,8 @@
 
                 return getAllCards().filter(card => {
                     if (!card.due_date) return false;
-                    const cardDateStr = card.due_date.split('T')[0];
+                    // Direct string comparison - no timezone conversion
+                    const cardDateStr = card.due_date.split('T')[0]; // Handle both formats
                     return cardDateStr === dateStr;
                 });
             };
@@ -1140,8 +1228,11 @@
             const isOverdue = (date) => {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                date.setHours(0, 0, 0, 0);
-                return date < today;
+
+                const compareDate = new Date(date);
+                compareDate.setHours(0, 0, 0, 0);
+
+                return compareDate < today;
             };
 
             const monthNames = [
@@ -1492,7 +1583,7 @@
         function EditCardModal({ card, onSave, onDelete, onClose }) {
             const [title, setTitle] = useState(card.title);
             const [description, setDescription] = useState(card.description || '');
-            const [dueDate, setDueDate] = useState(card.due_date || '');
+            const [dueDate, setDueDate] = useState(formatDateForInput(card.due_date) || '');
             const [priority, setPriority] = useState(card.priority || 'medium');
 
             const handleSubmit = (e) => {
@@ -1580,6 +1671,7 @@
             const [priority, setPriority] = useState('medium');
 
             const formatDateForDisplay = (date) => {
+                // Use local date methods to avoid timezone issues
                 return date.toLocaleDateString('ca-ES', {
                     weekday: 'long',
                     year: 'numeric',
@@ -1589,6 +1681,7 @@
             };
 
             const formatDateForInput = (date) => {
+                // Use local date methods to avoid timezone issues
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
@@ -1724,7 +1817,15 @@
             );
         }
 
-        ReactDOM.render(<KanbanBoard />, document.getElementById('root'));
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot ? ReactDOM.createRoot(container) : null;
+
+        if (root) {
+            root.render(<KanbanBoard />);
+        } else {
+            // Fallback for older React versions
+            ReactDOM.render(<KanbanBoard />, container);
+        }
     </script>
 </body>
 

@@ -273,11 +273,16 @@ app.post("/api/cards", (req, res) => {
 
 			const position = results[0].nextPos;
 
-			// Handle date properly - store as date string without time
+			// Handle date properly - ensure it stays as the same date
 			let formattedDate = null;
 			if (due_date) {
-				// Ensure we store just the date part, not datetime
-				formattedDate = due_date.split("T")[0];
+				// Always ensure we're working with YYYY-MM-DD format only
+				if (typeof due_date === "string") {
+					// Extract just the date part, ignoring any time or timezone info
+					formattedDate = due_date.split("T")[0];
+				} else {
+					formattedDate = due_date;
+				}
 			}
 
 			db.query(
@@ -302,7 +307,7 @@ app.post("/api/cards", (req, res) => {
 						description: description || "",
 						position,
 						priority: priority || "medium",
-						due_date: formattedDate,
+						due_date: formattedDate, // Return the same format we stored
 					});
 				}
 			);
@@ -459,8 +464,6 @@ app.put("/api/cards/:id", (req, res) => {
 	const cardId = req.params.id;
 	const updates = req.body;
 
-	console.log("Updating card with data:", updates); // Debug log
-
 	// Get current card data first
 	db.query("SELECT * FROM cards WHERE id = ?", [cardId], (err, results) => {
 		if (err) {
@@ -494,10 +497,16 @@ app.put("/api/cards/:id", (req, res) => {
 					: currentCard.due_date,
 		};
 
-		// Handle date properly - store as date string without time
+		// Handle date properly - ensure it stays as the same date
 		let formattedDate = null;
 		if (updatedData.due_date) {
-			formattedDate = updatedData.due_date.split("T")[0];
+			// Always ensure we're working with YYYY-MM-DD format only
+			if (typeof updatedData.due_date === "string") {
+				// Extract just the date part, ignoring any time or timezone info
+				formattedDate = updatedData.due_date.split("T")[0];
+			} else {
+				formattedDate = updatedData.due_date;
+			}
 		}
 
 		db.query(
@@ -515,8 +524,10 @@ app.put("/api/cards/:id", (req, res) => {
 					res.status(500).json({ error: err.message });
 					return;
 				}
-				console.log("Card updated successfully"); // Debug log
-				res.json({ success: true });
+				res.json({
+					success: true,
+					due_date: formattedDate, // Return the formatted date
+				});
 			}
 		);
 	});
@@ -658,7 +669,7 @@ app.delete("/api/lists/:id", (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-	console.log(`Kanban server running on port ${PORT}`);
+	//console.log(`Kanban server running on port ${PORT}`);
 });
 
 // Graceful shutdown
