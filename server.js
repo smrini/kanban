@@ -1,3 +1,6 @@
+// Load environment variables
+require("dotenv").config();
+
 const express = require("express");
 const mysql = require("mysql");
 const cors = require("cors");
@@ -5,10 +8,32 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const NODE_ENV = process.env.NODE_ENV || "development";
+3001;
+
+// CORS configuration
+const corsOptions = {
+	origin: function (origin, callback) {
+		// Allow requests with no origin (like mobile apps or curl requests)
+		if (!origin) return callback(null, true);
+
+		const allowedOrigins = process.env.CORS_ORIGINS
+			? process.env.CORS_ORIGINS.split(",").map((origin) => origin.trim())
+			: ["http://localhost:3001"];
+
+		if (allowedOrigins.indexOf(origin) !== -1) {
+			callback(null, true);
+		} else {
+			callback(new Error("Not allowed by CORS"));
+		}
+	},
+	credentials: true,
+};
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static("public"));
 app.use(
 	"/fontawesome",
@@ -17,13 +42,40 @@ app.use(
 	)
 );
 
-// Initialize MySQL database connection
+// Security headers for production
+if (NODE_ENV === "production") {
+	app.use((req, res, next) => {
+		res.setHeader("X-Content-Type-Options", "nosniff");
+		res.setHeader("X-Frame-Options", "DENY");
+		res.setHeader("X-XSS-Protection", "1; mode=block");
+		res.setHeader(
+			"Strict-Transport-Security",
+			"max-age=31536000; includeSubDomains"
+		);
+		next();
+	});
+}
+
+// Initialize MySQL database connection with environment variables
 const db = mysql.createConnection({
-	host: "localhost",
-	user: "root",
-	password: "", // Default Laragon MySQL password is empty
-	database: "kanban_db",
-	port: 3306, // Default MySQL port
+	host: process.env.DB_HOST || "localhost",
+	user: process.env.DB_USER || "root",
+	password: process.env.DB_PASSWORD || "",
+	database: process.env.DB_NAME || "kanban_db",
+	port: process.env.DB_PORT || 3306,
+	acquireTimeout: 60000,
+	timeout: 60000,
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+	console.error("Error:", err.message);
+
+	if (NODE_ENV === "production") {
+		res.status(500).json({ error: "Internal server error" });
+	} else {
+		res.status(500).json({ error: err.message, stack: err.stack });
+	}
 });
 
 // Connect to database
@@ -763,18 +815,34 @@ app.delete("/api/lists/:id", (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-	//console.log(`Kanban server running on port ${PORT}`);
+    console.log(`Kanban server running on port ${PORT}`);
+    console.log(`Environment: ${NODE_ENV}`);
+    if (NODE_ENV === 'development') {
+        console.log(`Visit: http://localhost:${PORT}`);
+    }
 });
 
 // Graceful shutdown
-process.on("SIGINT", () => {
-	console.log("\nShutting down server...");
-	db.end((err) => {
-		if (err) {
-			console.error(err.message);
-		} else {
-			console.log("Database connection closed.");
-		}
-		process.exit(0);
-	});
+process.on('SIGINT', () => {
+    console.log("\nShutting down server...");
+    db.end((err) => {
+        if (err) {
+            console.error(err.message);
+        } else {
+            console.log("Database connection closed.");
+        }
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    console.log("SIGTERM received, shutting down gracefully");
+    db.end((err) => {
+        if (err) {
+            console.error(err.message);
+        } else {
+            console.log("Database connection closed.");
+        }
+        process.exit(0);
+    });
 });

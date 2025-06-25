@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tauler Kanban</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="shortcut icon" href="assets/icons/home.png">
     <link rel="stylesheet" href="/fontawesome/css/all.min.css">
@@ -19,8 +19,8 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // API base URL
-        const API_BASE = 'http://localhost:3001/api';
+        // API base URL - automatically detect based on current host
+        const API_BASE = window.location.origin + '/api';
 
         const formatDateForInput = (dateString) => {
             if (!dateString) return '';
