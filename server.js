@@ -143,6 +143,48 @@ function initializeDatabase() {
 		}
 	);
 
+	// Clients table
+	db.query(
+		`
+        CREATE TABLE IF NOT EXISTS clients (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) UNIQUE,
+            phone VARCHAR(50),
+            company VARCHAR(255),
+            address TEXT,
+            status ENUM('active', 'inactive', 'prospect') DEFAULT 'active',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `,
+		(err) => {
+			if (err) console.error("Error creating clients table:", err);
+		}
+	);
+
+	// Workers table
+	db.query(
+		`
+        CREATE TABLE IF NOT EXISTS workers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) UNIQUE,
+            phone VARCHAR(50),
+            position VARCHAR(255),
+            department VARCHAR(255),
+            address TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `,
+		(err) => {
+			if (err) console.error("Error creating workers table:", err);
+		}
+	);
+
 	// Create default board and lists if they don't exist
 	db.query("SELECT COUNT(*) as count FROM boards", (err, results) => {
 		if (err) {
@@ -813,36 +855,370 @@ app.delete("/api/lists/:id", (req, res) => {
 	});
 });
 
+// ===== CLIENTS CRUD ROUTES =====
+
+// Get all clients
+app.get("/api/clients", (req, res) => {
+	const { search, status, limit = 50, offset = 0 } = req.query;
+
+	let query = "SELECT * FROM clients WHERE 1=1";
+	const params = [];
+
+	if (search) {
+		query += " AND (name LIKE ? OR email LIKE ? OR company LIKE ?)";
+		const searchTerm = `%${search}%`;
+		params.push(searchTerm, searchTerm, searchTerm);
+	}
+
+	if (status && status !== "all") {
+		query += " AND status = ?";
+		params.push(status);
+	}
+
+	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+	params.push(parseInt(limit), parseInt(offset));
+
+	db.query(query, params, (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json(results);
+	});
+});
+
+// Get client by ID
+app.get("/api/clients/:id", (req, res) => {
+	const clientId = req.params.id;
+
+	db.query(
+		"SELECT * FROM clients WHERE id = ?",
+		[clientId],
+		(err, results) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			if (results.length === 0) {
+				res.status(404).json({ error: "Client not found" });
+				return;
+			}
+			res.json(results[0]);
+		}
+	);
+});
+
+// Create new client
+app.post("/api/clients", (req, res) => {
+	const { name, email, phone, company, address, status, notes } = req.body;
+
+	if (!name) {
+		res.status(400).json({ error: "Name is required" });
+		return;
+	}
+
+	db.query(
+		`INSERT INTO clients (name, email, phone, company, address, status, notes) 
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		[
+			name,
+			email || null,
+			phone || null,
+			company || null,
+			address || null,
+			status || "active",
+			notes || null,
+		],
+		function (err, result) {
+			if (err) {
+				if (err.code === "ER_DUP_ENTRY") {
+					res.status(400).json({ error: "Email already exists" });
+				} else {
+					res.status(500).json({ error: err.message });
+				}
+				return;
+			}
+			res.json({
+				id: result.insertId,
+				name,
+				email,
+				phone,
+				company,
+				address,
+				status: status || "active",
+				notes,
+			});
+		}
+	);
+});
+
+// Update client
+app.put("/api/clients/:id", (req, res) => {
+	const clientId = req.params.id;
+	const { name, email, phone, company, address, status, notes } = req.body;
+
+	if (!name) {
+		res.status(400).json({ error: "Name is required" });
+		return;
+	}
+
+	db.query(
+		`UPDATE clients SET name = ?, email = ?, phone = ?, company = ?, address = ?, status = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ?`,
+		[
+			name,
+			email || null,
+			phone || null,
+			company || null,
+			address || null,
+			status || "active",
+			notes || null,
+			clientId,
+		],
+		function (err, result) {
+			if (err) {
+				if (err.code === "ER_DUP_ENTRY") {
+					res.status(400).json({ error: "Email already exists" });
+				} else {
+					res.status(500).json({ error: err.message });
+				}
+				return;
+			}
+			if (result.affectedRows === 0) {
+				res.status(404).json({ error: "Client not found" });
+				return;
+			}
+			res.json({ success: true });
+		}
+	);
+});
+
+// Delete client
+app.delete("/api/clients/:id", (req, res) => {
+	const clientId = req.params.id;
+
+	db.query(
+		"DELETE FROM clients WHERE id = ?",
+		[clientId],
+		function (err, result) {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			if (result.affectedRows === 0) {
+				res.status(404).json({ error: "Client not found" });
+				return;
+			}
+			res.json({ success: true });
+		}
+	);
+});
+
+// ===== WORKERS CRUD ROUTES =====
+
+// Get all workers
+app.get("/api/workers", (req, res) => {
+	const { search, department, limit = 50, offset = 0 } = req.query;
+
+	let query = "SELECT * FROM workers WHERE 1=1";
+	const params = [];
+
+	if (search) {
+		query += " AND (name LIKE ? OR email LIKE ? OR position LIKE ?)";
+		const searchTerm = `%${search}%`;
+		params.push(searchTerm, searchTerm, searchTerm);
+	}
+
+	if (department && department !== "all") {
+		query += " AND department = ?";
+		params.push(department);
+	}
+
+	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+	params.push(parseInt(limit), parseInt(offset));
+
+	db.query(query, params, (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json(results);
+	});
+});
+
+// Get worker by ID
+app.get("/api/workers/:id", (req, res) => {
+	const workerId = req.params.id;
+
+	db.query(
+		"SELECT * FROM workers WHERE id = ?",
+		[workerId],
+		(err, results) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			if (results.length === 0) {
+				res.status(404).json({ error: "Worker not found" });
+				return;
+			}
+			res.json(results[0]);
+		}
+	);
+});
+
+// Create new worker
+app.post("/api/workers", (req, res) => {
+	const { name, email, phone, position, department, address, notes } =
+		req.body;
+
+	if (!name) {
+		res.status(400).json({ error: "Name is required" });
+		return;
+	}
+
+	db.query(
+		`INSERT INTO workers (name, email, phone, position, department, address, notes) 
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		[
+			name,
+			email || null,
+			phone || null,
+			position || null,
+			department || null,
+			address || null,
+			notes || null,
+		],
+		function (err, result) {
+			if (err) {
+				if (err.code === "ER_DUP_ENTRY") {
+					res.status(400).json({ error: "Email already exists" });
+				} else {
+					res.status(500).json({ error: err.message });
+				}
+				return;
+			}
+			res.json({
+				id: result.insertId,
+				name,
+				email,
+				phone,
+				position,
+				department,
+				address,
+				notes,
+			});
+		}
+	);
+});
+
+// Update worker
+app.put("/api/workers/:id", (req, res) => {
+	const workerId = req.params.id;
+	const { name, email, phone, position, department, address, notes } =
+		req.body;
+
+	if (!name) {
+		res.status(400).json({ error: "Name is required" });
+		return;
+	}
+
+	db.query(
+		`UPDATE workers SET name = ?, email = ?, phone = ?, position = ?, department = ?, address = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ?`,
+		[
+			name,
+			email || null,
+			phone || null,
+			position || null,
+			department || null,
+			address || null,
+			notes || null,
+			workerId,
+		],
+		function (err, result) {
+			if (err) {
+				if (err.code === "ER_DUP_ENTRY") {
+					res.status(400).json({ error: "Email already exists" });
+				} else {
+					res.status(500).json({ error: err.message });
+				}
+				return;
+			}
+			if (result.affectedRows === 0) {
+				res.status(404).json({ error: "Worker not found" });
+				return;
+			}
+			res.json({ success: true });
+		}
+	);
+});
+
+// Delete worker
+app.delete("/api/workers/:id", (req, res) => {
+	const workerId = req.params.id;
+
+	db.query(
+		"DELETE FROM workers WHERE id = ?",
+		[workerId],
+		function (err, result) {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			if (result.affectedRows === 0) {
+				res.status(404).json({ error: "Worker not found" });
+				return;
+			}
+			res.json({ success: true });
+		}
+	);
+});
+
+// Get departments for dropdown
+app.get("/api/departments", (req, res) => {
+	db.query(
+		"SELECT DISTINCT department FROM workers WHERE department IS NOT NULL AND department != '' ORDER BY department",
+		(err, results) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			res.json(results.map((row) => row.department));
+		}
+	);
+});
+
 // Start server
 app.listen(PORT, () => {
-    console.log(`Kanban server running on port ${PORT}`);
-    console.log(`Environment: ${NODE_ENV}`);
-    if (NODE_ENV === 'development') {
-        console.log(`Visit: http://localhost:${PORT}`);
-    }
+	console.log(`Kanban server running on port ${PORT}`);
+	console.log(`Environment: ${NODE_ENV}`);
+	if (NODE_ENV === "development") {
+		console.log(`Visit: http://localhost:${PORT}`);
+	}
 });
 
 // Graceful shutdown
-process.on('SIGINT', () => {
-    console.log("\nShutting down server...");
-    db.end((err) => {
-        if (err) {
-            console.error(err.message);
-        } else {
-            console.log("Database connection closed.");
-        }
-        process.exit(0);
-    });
+process.on("SIGINT", () => {
+	console.log("\nShutting down server...");
+	db.end((err) => {
+		if (err) {
+			console.error(err.message);
+		} else {
+			console.log("Database connection closed.");
+		}
+		process.exit(0);
+	});
 });
 
-process.on('SIGTERM', () => {
-    console.log("SIGTERM received, shutting down gracefully");
-    db.end((err) => {
-        if (err) {
-            console.error(err.message);
-        } else {
-            console.log("Database connection closed.");
-        }
-        process.exit(0);
-    });
+process.on("SIGTERM", () => {
+	console.log("SIGTERM received, shutting down gracefully");
+	db.end((err) => {
+		if (err) {
+			console.error(err.message);
+		} else {
+			console.log("Database connection closed.");
+		}
+		process.exit(0);
+	});
 });

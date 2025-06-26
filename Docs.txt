@@ -13,10 +13,18 @@
     * Done: Adding filters
     * Done: Dragable cards on Calendar view
     * Done: Adding the Confirmation models
+    * Done: Making the project work on touch display
+    * Done: Responsive WebPage
+    * Done: Creating 2 Cruds
+        * Done: Workers CRUD 
+        * Done: Clients CRUD 
+    * Done: Make the Add list button a toggle list for more actions
 
 */
 
 // !issue
 /*
-    
+    Fixed: Fix the the refreashing problem with the Search Bar - Implemented instant client-side filtering with advanced word-based search for both CRUDs and Cards
+    Fixed?: Fix the problem with time zones
+    Fixed: Fix the problem with filters button on the Crud views
 */
