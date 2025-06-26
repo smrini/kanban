@@ -178,6 +178,10 @@ button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	min-width: 46px;
+	min-height: 36px;
+	width: 34px;
+	height: 36px;
 }
 
 .theme-toggle-button:hover {
