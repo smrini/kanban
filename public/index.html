@@ -281,9 +281,12 @@
                 }
             };
 
-            const addCard = async (listId, title, description, dueDate, priority) => {
+            const addCard = async (listId, title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) => {
                 try {
-                    console.log('Adding card with priority:', priority);
+                    console.log('Adding card with all fields:', {
+                        listId, title, description, dueDate, priority,
+                        clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands
+                    });
 
                     const response = await fetch(`${API_BASE}/cards`, {
                         method: 'POST',
@@ -295,7 +298,13 @@
                             title,
                             description,
                             due_date: dueDate || null,
-                            priority
+                            priority,
+                            client_id: clientId,
+                            worker_id: workerId,
+                            head_equip_id: headEquipId,
+                            start_datetime: startDatetime,
+                            vehicle_number: vehicleNumber,
+                            commands
                         })
                     });
 
@@ -306,7 +315,7 @@
                     const newCard = await response.json();
                     console.log('Received card from API:', newCard);
 
-                    const cardWithPriority = {
+                    const cardWithAllFields = {
                         ...newCard,
                         priority: newCard.priority || priority,
                         due_date: newCard.due_date || (dueDate || null)
@@ -316,7 +325,7 @@
                         ...prev,
                         lists: prev.lists.map(list =>
                             list.id === listId
-                                ? { ...list, cards: [...list.cards, cardWithPriority] }
+                                ? { ...list, cards: [...list.cards, cardWithAllFields] }
                                 : list
                         )
                     }));
@@ -330,7 +339,7 @@
                 }
             };
 
-            const updateCard = async (cardId, title, description, dueDate, priority) => {
+            const updateCard = async (cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) => {
                 try {
                     const response = await fetch(`${API_BASE}/cards/${cardId}`, {
                         method: 'PUT',
@@ -340,8 +349,13 @@
                         body: JSON.stringify({
                             title,
                             description,
-                            due_date: dueDate || null,
-                            priority
+                            priority,
+                            client_id: clientId,
+                            worker_id: workerId,
+                            head_equip_id: headEquipId,
+                            start_datetime: startDatetime,
+                            vehicle_number: vehicleNumber,
+                            commands
                         })
                     });
 
@@ -349,18 +363,10 @@
                         throw new Error('Failed to update card');
                     }
 
-                    // Update the board state with the exact date we sent
-                    setBoard(prev => ({
-                        ...prev,
-                        lists: prev.lists.map(list => ({
-                            ...list,
-                            cards: list.cards.map(card =>
-                                card.id === cardId
-                                    ? { ...card, title, description, due_date: dueDate, priority }
-                                    : card
-                            )
-                        }))
-                    }));
+                    // Refresh the board to get updated card with client/worker names
+                    if (boardId) {
+                        fetchBoardData(boardId);
+                    }
                     setEditingCard(null);
                 } catch (err) {
                     console.error('Error updating card:', err);
@@ -955,7 +961,9 @@
 
                     {showAddCard && (
                         <AddCardModal
-                            onSave={(title, description, dueDate, priority) => addCard(showAddCard, title, description, dueDate, priority)}
+                            onSave={(title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) =>
+                                addCard(showAddCard, title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands)
+                            }
                             onClose={() => setShowAddCard(null)}
                         />
                     )}
@@ -2299,17 +2307,120 @@
         function AddCardModal({ onSave, onClose }) {
             const [title, setTitle] = useState('');
             const [description, setDescription] = useState('');
-            const [dueDate, setDueDate] = useState('');
             const [priority, setPriority] = useState('medium');
+            const [clientId, setClientId] = useState('');
+            const [clientSearch, setClientSearch] = useState('');
+            const [clients, setClients] = useState([]);
+            const [workerId, setWorkerId] = useState('');
+            const [workerSearch, setWorkerSearch] = useState('');
+            const [workers, setWorkers] = useState([]);
+            const [headEquipId, setHeadEquipId] = useState('');
+            const [headEquipSearch, setHeadEquipSearch] = useState('');
+            const [headEquipList, setHeadEquipList] = useState([]);
+            const [startDatetime, setStartDatetime] = useState('');
+            const [vehicleNumber, setVehicleNumber] = useState('');
+            const [commands, setCommands] = useState('');
+
+            // Search for clients
+            useEffect(() => {
+                const searchClients = async () => {
+                    if (!clientSearch.trim()) {
+                        setClients([]);
+                        return;
+                    }
+                    try {
+                        console.log('Searching for clients with term:', clientSearch);
+                        const response = await fetch(`${API_BASE}/clients/search?term=${encodeURIComponent(clientSearch)}`);
+                        console.log('Client search response status:', response.status);
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('Client search results:', data);
+                            setClients(data);
+                        } else {
+                            console.error('Client search failed:', response.status, response.statusText);
+                        }
+                    } catch (err) {
+                        console.error('Error searching clients:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchClients, 300);
+                return () => clearTimeout(timeoutId);
+            }, [clientSearch]);
+
+            // Search for workers
+            useEffect(() => {
+                const searchWorkers = async () => {
+                    if (!workerSearch.trim()) {
+                        setWorkers([]);
+                        return;
+                    }
+                    try {
+                        console.log('Searching for workers with term:', workerSearch);
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(workerSearch)}`);
+                        console.log('Worker search response status:', response.status);
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('Worker search results:', data);
+                            setWorkers(data);
+                        } else {
+                            console.error('Worker search failed:', response.status, response.statusText);
+                        }
+                    } catch (err) {
+                        console.error('Error searching workers:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchWorkers, 300);
+                return () => clearTimeout(timeoutId);
+            }, [workerSearch]);
+
+            // Search for head equipment
+            useEffect(() => {
+                const searchHeadEquip = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}&role=head_equip`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setHeadEquipList(data);
+                        }
+                    } catch (err) {
+                        console.error('Error searching head equipment:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchHeadEquip, 300);
+                return () => clearTimeout(timeoutId);
+            }, [headEquipSearch]);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (title.trim()) {
-                    onSave(title.trim(), description.trim(), dueDate, priority);
+                    onSave(
+                        title.trim(),
+                        description.trim(),
+                        null, // dueDate removed
+                        priority,
+                        clientId || null,
+                        workerId || null,
+                        headEquipId || null,
+                        startDatetime || null,
+                        vehicleNumber.trim() || null,
+                        commands.trim() || null
+                    );
+                    // Reset form
                     setTitle('');
                     setDescription('');
-                    setDueDate('');
                     setPriority('medium');
+                    setClientId('');
+                    setClientSearch('');
+                    setWorkerId('');
+                    setWorkerSearch('');
+                    setHeadEquipId('');
+                    setHeadEquipSearch('');
+                    setStartDatetime('');
+                    setVehicleNumber('');
+                    setCommands('');
                 }
             };
 
@@ -2319,32 +2430,139 @@
                 }
             };
 
+            const selectClient = (client) => {
+                setClientId(client.id);
+                setClientSearch(`${client.name}${client.company ? ` (${client.company})` : ''}`);
+                setClients([]);
+            };
+
+            const selectWorker = (worker) => {
+                setWorkerId(worker.id);
+                setWorkerSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                setWorkers([]);
+            };
+
+            const selectHeadEquip = (worker) => {
+                setHeadEquipId(worker.id);
+                setHeadEquipSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                setHeadEquipList([]);
+            };
+
             return (
                 <div className="modal-overlay" onClick={handleOverlayClick}>
                     <div className="modal-content wide">
                         <h3>Afegir Nova Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
-                            <input
-                                type="text"
-                                placeholder="Títol de la targeta"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                autoFocus
-                                className="modal-input"
-                            />
-                            <textarea
-                                placeholder="Descripció de la targeta (opcional)"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                className="modal-textarea"
-                            />
+                            <div className="form-group">
+                                <label>Títol de la Targeta:</label>
+                                <input
+                                    type="text"
+                                    placeholder="Títol de la targeta"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    autoFocus
+                                    className="modal-input"
+                                    required
+                                />
+                            </div>
+
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Data Límit:</label>
+                                    <label>Client:</label>
+                                    <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar client..."
+                                            value={clientSearch}
+                                            onChange={(e) => setClientSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
+                                        {clients.length > 0 && clientSearch && (
+                                            <div className="search-results">
+                                                {clients.map(client => (
+                                                    <div
+                                                        key={client.id}
+                                                        className="search-result-item"
+                                                        onClick={() => selectClient(client)}
+                                                    >
+                                                        {client.name}{client.company ? ` (${client.company})` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Treballador:</label>
+                                    <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar treballador..."
+                                            value={workerSearch}
+                                            onChange={(e) => setWorkerSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
+                                        {workers.length > 0 && workerSearch && (
+                                            <div className="search-results">
+                                                {workers.map(worker => (
+                                                    <div
+                                                        key={worker.id}
+                                                        className="search-result-item"
+                                                        onClick={() => selectWorker(worker)}
+                                                    >
+                                                        {worker.name}{worker.position ? ` - ${worker.position}` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Cap d'Equip:</label>
+                                <div className="search-container">
                                     <input
-                                        type="date"
-                                        value={dueDate}
-                                        onChange={(e) => setDueDate(e.target.value)}
+                                        type="text"
+                                        placeholder="Cercar cap d'equip..."
+                                        value={headEquipSearch}
+                                        onChange={(e) => setHeadEquipSearch(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                    {headEquipList.length > 0 && headEquipSearch && (
+                                        <div className="search-results">
+                                            {headEquipList.map(worker => (
+                                                <div
+                                                    key={worker.id}
+                                                    className="search-result-item"
+                                                    onClick={() => selectHeadEquip(worker)}
+                                                >
+                                                    {worker.name}{worker.position ? ` - ${worker.position}` : ''}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Hora d'Inici:</label>
+                                    <input
+                                        type="datetime-local"
+                                        value={startDatetime}
+                                        onChange={(e) => setStartDatetime(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Vehicle:</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Número o nom del vehicle"
+                                        value={vehicleNumber}
+                                        onChange={(e) => setVehicleNumber(e.target.value)}
                                         className="modal-input"
                                     />
                                 </div>
@@ -2362,6 +2580,29 @@
                                     </select>
                                 </div>
                             </div>
+
+                            <div className="form-group">
+                                <label>Comandaments (Tasques):</label>
+                                <textarea
+                                    placeholder="Descriure les tasques que s'han de fer..."
+                                    value={commands}
+                                    onChange={(e) => setCommands(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="3"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Descripció:</label>
+                                <textarea
+                                    placeholder="Descripció addicional (opcional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="2"
+                                />
+                            </div>
+
                             <div className="modal-buttons">
                                 <button type="submit" className="save-button">
                                     <i className="fa-solid fa-plus"></i>
@@ -2380,27 +2621,97 @@
         function EditCardModal({ card, onSave, onDelete, onClose }) {
             const [title, setTitle] = useState(card.title);
             const [description, setDescription] = useState(card.description || '');
-
-            // Fix: Handle the date more carefully
-            const [dueDate, setDueDate] = useState(() => {
-                if (!card.due_date) return '';
-
-                // If it's already in YYYY-MM-DD format, use it directly
-                if (typeof card.due_date === 'string' && card.due_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                    return card.due_date;
-                }
-
-                // Otherwise, format it properly
-                return formatDateForInput(card.due_date);
-            });
-
             const [priority, setPriority] = useState(card.priority || 'medium');
+            const [clientId, setClientId] = useState(card.client_id || '');
+            const [clientSearch, setClientSearch] = useState(card.client_name ? `${card.client_name}${card.client_company ? ` (${card.client_company})` : ''}` : '');
+            const [clients, setClients] = useState([]);
+            const [workerId, setWorkerId] = useState(card.worker_id || '');
+            const [workerSearch, setWorkerSearch] = useState(card.worker_name ? `${card.worker_name}${card.worker_position ? ` - ${card.worker_position}` : ''}` : '');
+            const [workers, setWorkers] = useState([]);
+            const [headEquipId, setHeadEquipId] = useState(card.head_equip_id || '');
+            const [headEquipSearch, setHeadEquipSearch] = useState(card.head_equip_name ? `${card.head_equip_name}${card.head_equip_position ? ` - ${card.head_equip_position}` : ''}` : '');
+            const [headEquipList, setHeadEquipList] = useState([]);
+            const [startDatetime, setStartDatetime] = useState(card.start_datetime || '');
+            const [vehicleNumber, setVehicleNumber] = useState(card.vehicle_number || '');
+            const [commands, setCommands] = useState(card.commands || '');
+
+            // Search for clients
+            useEffect(() => {
+                const searchClients = async () => {
+                    if (!clientSearch.trim()) {
+                        setClients([]);
+                        return;
+                    }
+                    try {
+                        const response = await fetch(`${API_BASE}/clients/search?term=${encodeURIComponent(clientSearch)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setClients(data);
+                        }
+                    } catch (err) {
+                        console.error('Error searching clients:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchClients, 300);
+                return () => clearTimeout(timeoutId);
+            }, [clientSearch]);
+
+            // Search for workers
+            useEffect(() => {
+                const searchWorkers = async () => {
+                    if (!workerSearch.trim()) {
+                        setWorkers([]);
+                        return;
+                    }
+                    try {
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(workerSearch)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setWorkers(data);
+                        }
+                    } catch (err) {
+                        console.error('Error searching workers:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchWorkers, 300);
+                return () => clearTimeout(timeoutId);
+            }, [workerSearch]);
+
+            // Search for head equipment
+            useEffect(() => {
+                const searchHeadEquip = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}&role=head_equip`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setHeadEquipList(data);
+                        }
+                    } catch (err) {
+                        console.error('Error searching head equipment:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchHeadEquip, 300);
+                return () => clearTimeout(timeoutId);
+            }, [headEquipSearch]);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (title.trim()) {
-                    console.log('EditCardModal - saving with date:', dueDate);
-                    onSave(card.id, title.trim(), description.trim(), dueDate, priority);
+                    onSave(
+                        card.id,
+                        title.trim(),
+                        description.trim(),
+                        priority,
+                        clientId || null,
+                        workerId || null,
+                        headEquipId || null,
+                        startDatetime || null,
+                        vehicleNumber.trim() || null,
+                        commands.trim() || null
+                    );
                 }
             };
 
@@ -2414,34 +2725,139 @@
                 }
             };
 
+            const selectClient = (client) => {
+                setClientId(client.id);
+                setClientSearch(`${client.name}${client.company ? ` (${client.company})` : ''}`);
+                setClients([]);
+            };
+
+            const selectWorker = (worker) => {
+                setWorkerId(worker.id);
+                setWorkerSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                setWorkers([]);
+            };
+
+            const selectHeadEquip = (worker) => {
+                setHeadEquipId(worker.id);
+                setHeadEquipSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                setHeadEquipList([]);
+            };
+
             return (
                 <div className="modal-overlay" onClick={handleOverlayClick}>
                     <div className="modal-content wide">
                         <h3>Editar Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
-                            <input
-                                type="text"
-                                placeholder="Títol de la targeta"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="modal-input"
-                            />
-                            <textarea
-                                placeholder="Descripció de la targeta"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                className="modal-textarea"
-                            />
+                            <div className="form-group">
+                                <label>Títol de la Targeta:</label>
+                                <input
+                                    type="text"
+                                    placeholder="Títol de la targeta"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    autoFocus
+                                    className="modal-input"
+                                    required
+                                />
+                            </div>
+
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Data Límit:</label>
+                                    <label>Client:</label>
+                                    <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar client..."
+                                            value={clientSearch}
+                                            onChange={(e) => setClientSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
+                                        {clients.length > 0 && clientSearch && (
+                                            <div className="search-results">
+                                                {clients.map(client => (
+                                                    <div
+                                                        key={client.id}
+                                                        className="search-result-item"
+                                                        onClick={() => selectClient(client)}
+                                                    >
+                                                        {client.name}{client.company ? ` (${client.company})` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Treballador:</label>
+                                    <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar treballador..."
+                                            value={workerSearch}
+                                            onChange={(e) => setWorkerSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
+                                        {workers.length > 0 && workerSearch && (
+                                            <div className="search-results">
+                                                {workers.map(worker => (
+                                                    <div
+                                                        key={worker.id}
+                                                        className="search-result-item"
+                                                        onClick={() => selectWorker(worker)}
+                                                    >
+                                                        {worker.name}{worker.position ? ` - ${worker.position}` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Cap d'Equip:</label>
+                                <div className="search-container">
                                     <input
-                                        type="date"
-                                        value={dueDate}
-                                        onChange={(e) => {
-                                            console.log('Date input changed to:', e.target.value);
-                                            setDueDate(e.target.value);
-                                        }}
+                                        type="text"
+                                        placeholder="Cercar cap d'equip..."
+                                        value={headEquipSearch}
+                                        onChange={(e) => setHeadEquipSearch(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                    {headEquipList.length > 0 && headEquipSearch && (
+                                        <div className="search-results">
+                                            {headEquipList.map(worker => (
+                                                <div
+                                                    key={worker.id}
+                                                    className="search-result-item"
+                                                    onClick={() => selectHeadEquip(worker)}
+                                                >
+                                                    {worker.name}{worker.position ? ` - ${worker.position}` : ''}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Hora d'Inici:</label>
+                                    <input
+                                        type="datetime-local"
+                                        value={startDatetime}
+                                        onChange={(e) => setStartDatetime(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Vehicle:</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Número o nom del vehicle"
+                                        value={vehicleNumber}
+                                        onChange={(e) => setVehicleNumber(e.target.value)}
                                         className="modal-input"
                                     />
                                 </div>
@@ -2459,6 +2875,29 @@
                                     </select>
                                 </div>
                             </div>
+
+                            <div className="form-group">
+                                <label>Comandaments (Tasques):</label>
+                                <textarea
+                                    placeholder="Descriure les tasques que s'han de fer..."
+                                    value={commands}
+                                    onChange={(e) => setCommands(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="3"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Descripció:</label>
+                                <textarea
+                                    placeholder="Descripció addicional (opcional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="2"
+                                />
+                            </div>
+
                             <div className="modal-buttons">
                                 <button type="submit" className="save-button">
                                     <i className="fas fa-save"></i>

@@ -123,27 +123,7 @@ function initializeDatabase() {
 		}
 	);
 
-	// Cards table
-	db.query(
-		`
-        CREATE TABLE IF NOT EXISTS cards (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            list_id INT,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            position INT NOT NULL,
-            priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
-            due_date DATE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
-        )
-    `,
-		(err) => {
-			if (err) console.error("Error creating cards table:", err);
-		}
-	);
-
-	// Clients table
+	// Clients table - Create before cards table
 	db.query(
 		`
         CREATE TABLE IF NOT EXISTS clients (
@@ -164,7 +144,7 @@ function initializeDatabase() {
 		}
 	);
 
-	// Workers table
+	// Workers table - Create before cards table
 	db.query(
 		`
         CREATE TABLE IF NOT EXISTS workers (
@@ -185,6 +165,35 @@ function initializeDatabase() {
 		}
 	);
 
+	// Cards table - Create after clients and workers tables
+	db.query(
+		`
+        CREATE TABLE IF NOT EXISTS cards (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            list_id INT,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            position INT NOT NULL,
+            priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+            due_date DATE,
+            client_id INT,
+            worker_id INT,
+            head_equip_id INT,
+            start_datetime DATETIME,
+            vehicle_number VARCHAR(100),
+            commands TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE,
+            FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+            FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL,
+            FOREIGN KEY (head_equip_id) REFERENCES workers(id) ON DELETE SET NULL
+        )
+    `,
+		(err) => {
+			if (err) console.error("Error creating cards table:", err);
+		}
+	);
+
 	// Create default board and lists if they don't exist
 	db.query("SELECT COUNT(*) as count FROM boards", (err, results) => {
 		if (err) {
@@ -195,6 +204,86 @@ function initializeDatabase() {
 			createDefaultData();
 		}
 	});
+
+	// Migrate existing cards table to add new columns
+	const migrateCardsTable = () => {
+		// Check which columns exist and add missing ones
+		db.query("DESCRIBE cards", (err, columns) => {
+			if (err) {
+				console.log("Cards table migration check failed:", err.message);
+				return;
+			}
+
+			const existingColumns = columns.map((col) => col.Field);
+			const requiredColumns = [
+				{
+					name: "client_id",
+					sql: "ALTER TABLE cards ADD COLUMN client_id INT",
+				},
+				{
+					name: "worker_id",
+					sql: "ALTER TABLE cards ADD COLUMN worker_id INT",
+				},
+				{
+					name: "head_equip_id",
+					sql: "ALTER TABLE cards ADD COLUMN head_equip_id INT",
+				},
+				{
+					name: "start_datetime",
+					sql: "ALTER TABLE cards ADD COLUMN start_datetime DATETIME",
+				},
+				{
+					name: "vehicle_number",
+					sql: "ALTER TABLE cards ADD COLUMN vehicle_number VARCHAR(100)",
+				},
+				{
+					name: "commands",
+					sql: "ALTER TABLE cards ADD COLUMN commands TEXT",
+				},
+			];
+
+			// Add missing columns
+			requiredColumns.forEach((column) => {
+				if (!existingColumns.includes(column.name)) {
+					db.query(column.sql, (err) => {
+						if (err) {
+							console.log(
+								`Migration note - adding ${column.name}:`,
+								err.message
+							);
+						} else {
+							console.log(
+								`Successfully added column: ${column.name}`
+							);
+						}
+					});
+				}
+			});
+
+			// Add foreign key constraints (with error handling for existing constraints)
+			setTimeout(() => {
+				const constraints = [
+					"ALTER TABLE cards ADD CONSTRAINT fk_cards_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL",
+					"ALTER TABLE cards ADD CONSTRAINT fk_cards_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL",
+					"ALTER TABLE cards ADD CONSTRAINT fk_cards_head_equip FOREIGN KEY (head_equip_id) REFERENCES workers(id) ON DELETE SET NULL",
+				];
+
+				constraints.forEach((constraint, index) => {
+					db.query(constraint, (err) => {
+						if (err && !err.message.includes("Duplicate")) {
+							console.log(
+								`Foreign key constraint ${index + 1} note:`,
+								err.message
+							);
+						}
+					});
+				});
+			}, 1000); // Wait for column additions to complete
+		});
+	};
+
+	// Run migration after a short delay to ensure tables are created
+	setTimeout(migrateCardsTable, 500);
 }
 
 function createDefaultData() {
@@ -275,7 +364,15 @@ app.get("/api/boards/:id", (req, res) => {
 					const listPromises = lists.map((list) => {
 						return new Promise((resolve, reject) => {
 							db.query(
-								"SELECT * FROM cards WHERE list_id = ? ORDER BY position",
+								`SELECT c.*, 
+									cl.name as client_name, cl.company as client_company,
+									w.name as worker_name, w.position as worker_position,
+									he.name as head_equip_name, he.position as head_equip_position
+								FROM cards c
+								LEFT JOIN clients cl ON c.client_id = cl.id
+								LEFT JOIN workers w ON c.worker_id = w.id  
+								LEFT JOIN workers he ON c.head_equip_id = he.id
+								WHERE c.list_id = ? ORDER BY c.position`,
 								[list.id],
 								(err, cards) => {
 									if (err) reject(err);
@@ -398,9 +495,21 @@ app.post("/api/lists", (req, res) => {
 	);
 });
 
-// Create new card - Updated to handle priority and due_date
+// Create new card - Updated to handle priority and due_date and new fields
 app.post("/api/cards", (req, res) => {
-	const { list_id, title, description, due_date, priority } = req.body;
+	const {
+		list_id,
+		title,
+		description,
+		due_date,
+		priority,
+		client_id,
+		worker_id,
+		head_equip_id,
+		start_datetime,
+		vehicle_number,
+		commands,
+	} = req.body;
 
 	console.log("Received card creation request:", {
 		list_id,
@@ -408,6 +517,12 @@ app.post("/api/cards", (req, res) => {
 		description,
 		due_date,
 		priority,
+		client_id,
+		worker_id,
+		head_equip_id,
+		start_datetime,
+		vehicle_number,
+		commands,
 	});
 
 	// Get the next position
@@ -444,11 +559,21 @@ app.post("/api/cards", (req, res) => {
 				}
 			}
 
+			// Handle start_datetime
+			let formattedStartDatetime = null;
+			if (start_datetime && start_datetime.trim() !== "") {
+				formattedStartDatetime = start_datetime;
+			}
+
 			console.log("Original due_date:", due_date);
 			console.log("Formatted date for storage:", formattedDate);
+			console.log("Start datetime:", formattedStartDatetime);
 
 			db.query(
-				"INSERT INTO cards (list_id, title, description, position, priority, due_date) VALUES (?, ?, ?, ?, ?, ?)",
+				`INSERT INTO cards (
+					list_id, title, description, position, priority, due_date,
+					client_id, worker_id, head_equip_id, start_datetime, vehicle_number, commands
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				[
 					list_id,
 					title,
@@ -456,6 +581,12 @@ app.post("/api/cards", (req, res) => {
 					position,
 					priority || "medium",
 					formattedDate,
+					client_id || null,
+					worker_id || null,
+					head_equip_id || null,
+					formattedStartDatetime,
+					vehicle_number || null,
+					commands || null,
 				],
 				function (err, result) {
 					if (err) {
@@ -471,7 +602,13 @@ app.post("/api/cards", (req, res) => {
 						description: description || "",
 						position,
 						priority: priority || "medium",
-						due_date: formattedDate, // Return the same format we stored
+						due_date: formattedDate,
+						client_id: client_id || null,
+						worker_id: worker_id || null,
+						head_equip_id: head_equip_id || null,
+						start_datetime: formattedStartDatetime,
+						vehicle_number: vehicle_number || null,
+						commands: commands || null,
 					};
 
 					console.log("Returning card data:", responseData);
@@ -665,6 +802,30 @@ app.put("/api/cards/:id", (req, res) => {
 				updates.due_date !== undefined
 					? updates.due_date
 					: currentCard.due_date,
+			client_id:
+				updates.client_id !== undefined
+					? updates.client_id
+					: currentCard.client_id,
+			worker_id:
+				updates.worker_id !== undefined
+					? updates.worker_id
+					: currentCard.worker_id,
+			head_equip_id:
+				updates.head_equip_id !== undefined
+					? updates.head_equip_id
+					: currentCard.head_equip_id,
+			start_datetime:
+				updates.start_datetime !== undefined
+					? updates.start_datetime
+					: currentCard.start_datetime,
+			vehicle_number:
+				updates.vehicle_number !== undefined
+					? updates.vehicle_number
+					: currentCard.vehicle_number,
+			commands:
+				updates.commands !== undefined
+					? updates.commands
+					: currentCard.commands,
 		};
 
 		// Handle date properly - ensure it stays as the same date
@@ -689,16 +850,36 @@ app.put("/api/cards/:id", (req, res) => {
 			}
 		}
 
+		// Handle start_datetime
+		let formattedStartDatetime = null;
+		if (
+			updatedData.start_datetime &&
+			updatedData.start_datetime.trim() !== ""
+		) {
+			formattedStartDatetime = updatedData.start_datetime;
+		}
+
 		console.log("Original due_date:", updatedData.due_date);
 		console.log("Formatted date for storage:", formattedDate);
+		console.log("Start datetime:", formattedStartDatetime);
 
 		db.query(
-			"UPDATE cards SET title = ?, description = ?, priority = ?, due_date = ? WHERE id = ?",
+			`UPDATE cards SET 
+				title = ?, description = ?, priority = ?, due_date = ?,
+				client_id = ?, worker_id = ?, head_equip_id = ?, 
+				start_datetime = ?, vehicle_number = ?, commands = ?
+			WHERE id = ?`,
 			[
 				updatedData.title,
 				updatedData.description || "",
 				updatedData.priority || "medium",
 				formattedDate,
+				updatedData.client_id || null,
+				updatedData.worker_id || null,
+				updatedData.head_equip_id || null,
+				formattedStartDatetime,
+				updatedData.vehicle_number || null,
+				updatedData.commands || null,
 				cardId,
 			],
 			function (err) {
@@ -887,6 +1068,28 @@ app.get("/api/clients", (req, res) => {
 	});
 });
 
+// Get clients for search (simplified) - MUST come before /:id route
+app.get("/api/clients/search", (req, res) => {
+	const { term } = req.query;
+	let query = "SELECT id, name, company FROM clients";
+	let params = [];
+
+	if (term) {
+		query += " WHERE name LIKE ? OR company LIKE ?";
+		params = [`%${term}%`, `%${term}%`];
+	}
+
+	query += " ORDER BY name LIMIT 20";
+
+	db.query(query, params, (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json(results || []);
+	});
+});
+
 // Get client by ID
 app.get("/api/clients/:id", (req, res) => {
 	const clientId = req.params.id;
@@ -1046,6 +1249,39 @@ app.get("/api/workers", (req, res) => {
 	});
 });
 
+// Get workers for search (simplified) - MUST come before /:id route
+app.get("/api/workers/search", (req, res) => {
+	const { term, role } = req.query;
+	let query = "SELECT id, name, position, department FROM workers";
+	let params = [];
+
+	if (term) {
+		query += " WHERE name LIKE ? OR position LIKE ?";
+		params = [`%${term}%`, `%${term}%`];
+	}
+
+	if (role === "head_equip") {
+		// For head equipment, you might want to filter by certain positions
+		if (term) {
+			query +=
+				" AND (position LIKE '%cap%' OR position LIKE '%head%' OR position LIKE '%supervisor%' OR position LIKE '%responsable%')";
+		} else {
+			query +=
+				" WHERE (position LIKE '%cap%' OR position LIKE '%head%' OR position LIKE '%supervisor%' OR position LIKE '%responsable%')";
+		}
+	}
+
+	query += " ORDER BY name LIMIT 20";
+
+	db.query(query, params, (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json(results || []);
+	});
+});
+
 // Get worker by ID
 app.get("/api/workers/:id", (req, res) => {
 	const workerId = req.params.id;
@@ -1187,6 +1423,49 @@ app.get("/api/departments", (req, res) => {
 			res.json(results.map((row) => row.department));
 		}
 	);
+});
+
+// Debug endpoints to check data
+app.get("/api/debug/clients", (req, res) => {
+	db.query("SELECT COUNT(*) as count FROM clients", (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json({ count: results[0].count });
+	});
+});
+
+app.get("/api/debug/workers", (req, res) => {
+	db.query("SELECT COUNT(*) as count FROM workers", (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json({ count: results[0].count });
+	});
+});
+
+// Debug endpoint to see all clients 
+app.get("/api/debug/all-clients", (req, res) => {
+	db.query("SELECT id, name, company FROM clients ORDER BY name", (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json(results);
+	});
+});
+
+// Debug endpoint to see all workers
+app.get("/api/debug/all-workers", (req, res) => {
+	db.query("SELECT id, name, position, department FROM workers ORDER BY name", (err, results) => {
+		if (err) {
+			res.status(500).json({ error: err.message });
+			return;
+		}
+		res.json(results);
+	});
 });
 
 // Start server

@@ -656,7 +656,9 @@ button {
 }
 
 .modal-content.wide {
-	max-width: 550px;
+	max-width: 700px;
+	max-height: 90vh;
+	overflow-y: auto;
 }
 
 .modal-content h3 {
@@ -678,21 +680,23 @@ button {
 
 .form-row {
 	display: flex;
-	gap: 15px;
+	gap: 1rem;
+	margin-bottom: 1rem;
+}
+
+.form-row .form-group {
+	flex: 1;
 }
 
 .form-group {
-	flex: 1;
-	margin-bottom: 0;
+	margin-bottom: 1rem;
 }
 
 .form-group label {
 	display: block;
-	margin-bottom: 8px;
-	font-weight: bold;
-	color: var(--text-primary);
-	font-size: 14px;
-	transition: color 0.3s ease;
+	margin-bottom: 0.5rem;
+	font-weight: 600;
+	color: var(--text-color);
 }
 
 .modal-input,
@@ -709,7 +713,7 @@ button {
 }
 
 .modal-textarea {
-	min-height: 100px;
+	min-height: 80px;
 	resize: vertical;
 }
 
@@ -1901,132 +1905,77 @@ button {
 	margin: 0;
 }
 
+/* Search container styles */
+.search-container {
+	position: relative;
+}
+
+.search-results {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	background: var(--bg-card);
+	border: 1px solid var(--border-input);
+	border-radius: 4px;
+	box-shadow: 0 4px 12px var(--shadow-medium);
+	max-height: 200px;
+	overflow-y: auto;
+	z-index: 1000;
+	margin-top: 2px;
+}
+
+.search-result-item {
+	padding: 12px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--border-color);
+	transition: background-color 0.2s;
+	color: var(--text-primary);
+	font-size: 14px;
+}
+
+.search-result-item:hover {
+	background-color: var(--calendar-hover);
+}
+
+.search-result-item:last-child {
+	border-bottom: none;
+}
+
 /* Form layout improvements */
 .form-row {
 	display: flex;
-	gap: 15px;
-	margin-bottom: 15px;
+	gap: 1rem;
+	margin-bottom: 1rem;
 }
 
 .form-row .form-group {
 	flex: 1;
-	margin-bottom: 0;
 }
 
-/* Dark theme adjustments for CRUD */
-[data-theme="dark"] .crud-view {
-	background: var(--bg-secondary);
+.form-group {
+	margin-bottom: 1rem;
 }
 
-[data-theme="dark"] .crud-header h2 {
+.form-group label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-weight: 600;
 	color: var(--text-primary);
 }
 
-[data-theme="dark"] .crud-table {
+/* Dark theme support for search */
+[data-theme="dark"] .search-results {
 	background: var(--bg-card);
+	border-color: var(--border-input);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-[data-theme="dark"] .crud-table th {
-	background: var(--bg-tertiary);
+[data-theme="dark"] .search-result-item {
+	border-bottom-color: var(--border-color);
 	color: var(--text-primary);
 }
 
-[data-theme="dark"] .crud-table td {
-	color: var(--text-primary);
-}
-
-[data-theme="dark"] .crud-table tr:hover {
-	background: var(--calendar-hover);
-}
-
-[data-theme="dark"] .status-active {
-	background: #1e7e34;
-	color: #d4edda;
-}
-
-[data-theme="dark"] .status-inactive {
-	background: #bd2130;
-	color: #f8d7da;
-}
-
-[data-theme="dark"] .status-prospect {
-	background: #b45309;
-	color: #fff3cd;
-}
-
-[data-theme="dark"] .status-on_leave {
-	background: #117a8b;
-	color: #d1ecf1;
-}
-
-/* Responsive CRUD tables */
-@media (max-width: 768px) {
-	.crud-filters {
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	.crud-filters .filter-item {
-		width: 100%;
-	}
-
-	.form-row {
-		flex-direction: column;
-		gap: 0;
-	}
-
-	.form-row .form-group {
-		margin-bottom: 15px;
-	}
-
-	.crud-header {
-		flex-direction: column;
-		gap: 15px;
-		align-items: stretch;
-	}
-
-	.crud-header h2 {
-		text-align: center;
-	}
-
-	.actions {
-		flex-direction: column;
-		gap: 4px;
-	}
-}
-
-/* Views button adjustment for 2 buttons */
-.views {
-	display: flex;
-	justify-content: center;
-	gap: 10px;
-	background: #5d5c5e;
-	padding: 5px;
-	border-radius: 10px;
-	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.views button {
-	padding: 10px 15px;
-	border: none;
-	background: transparent;
-	border-radius: 6px;
-	cursor: pointer;
-	font-size: 14px;
-	color: #cbd5e0;
-	transition: all 0.2s ease-in-out;
-	min-width: 45px;
-}
-
-@media (max-width: 768px) {
-	.views {
-		gap: 5px;
-		padding: 3px;
-	}
-
-	.views button {
-		padding: 8px 12px;
-		font-size: 12px;
-		min-width: 40px;
-	}
+[data-theme="dark"] .search-result-item:hover {
+	background-color: var(--calendar-hover);
 }

@@ -19,6 +19,9 @@
         * Done: Workers CRUD 
         * Done: Clients CRUD 
     * Done: Make the Add list button a toggle list for more actions
+    * Done: Update the Cards model to contain the new info (client, worker, head equip, start datetime, vehicle, commands)
+    * Done: Remove "Data Límit" field from card forms and make layout more compact
+    * Done: Update both AddCardModal and EditCardModal with all new fields and search functionality
 
 */
 
@@ -27,4 +30,7 @@
     Fixed: Fix the the refreashing problem with the Search Bar - Implemented instant client-side filtering with advanced word-based search for both CRUDs and Cards
     Fixed?: Fix the problem with time zones
     Fixed: Fix the problem with filters button on the Crud views
+    Fixed: Client/worker search dropdowns in card forms now properly styled and visible
+    Fixed: Removed "Data Límit" field from all card forms and made layout more compact
+    Fixed: EditCardModal now has all same fields as AddCardModal (client, worker, head equip, etc.)
 */
