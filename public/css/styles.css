@@ -61,11 +61,6 @@ body {
 	transition: background 0.3s ease;
 }
 
-/* i {
-	padding-right: 5px;
-}
-*/
-
 input,
 textarea,
 button {
@@ -205,6 +200,19 @@ button {
 	box-shadow: 0 2px 4px var(--shadow-light);
 	cursor: grab;
 	transition: all 0.3s ease;
+}
+
+@media (max-width: 990px) {
+	.board {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		flex-direction: column;
+	}
+
+	.list {
+		min-width: 90%;
+	}
 }
 
 .list:active {
