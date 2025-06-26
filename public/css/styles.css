@@ -237,8 +237,12 @@ button {
 	}
 
 	.action-bar-right {
-	gap: 10px;
-}
+		gap: 10px;
+	}
+
+	.header h1 {
+		text-align: center;
+	}
 }
 
 .list:active {
