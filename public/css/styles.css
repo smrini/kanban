@@ -59,12 +59,8 @@ body {
 	background: var(--bg-primary);
 	min-height: 100vh;
 	transition: background 0.3s ease;
+	min-width: 420px;
 }
-
-/* i {
-	padding-right: 5px;
-}
-*/
 
 input,
 textarea,
@@ -99,6 +95,7 @@ button {
 	border-radius: 10px;
 	padding: 15px;
 	width: 100%;
+	min-width: 380px;
 	background: var(--bg-secondary);
 	box-shadow: 0 4px 6px var(--shadow-light);
 	transition: background 0.3s ease;
@@ -209,6 +206,19 @@ button {
 
 .list:active {
 	cursor: grabbing;
+}
+
+@media (max-width: 990px) {
+	.board {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		flex-direction: column;
+	}
+
+	.list {
+		min-width: 90%;
+	}
 }
 
 .list.dragging {
