@@ -270,7 +270,6 @@
 
             const fetchBoard = async () => {
                 try {
-                    console.log('Fetching boards from:', `${API_BASE}/boards`);
                     const response = await fetch(`${API_BASE}/boards`);
 
                     if (!response.ok) {
@@ -278,10 +277,8 @@
                     }
 
                     const boards = await response.json();
-                    console.log('Boards received:', boards);
 
                     if (boards.length > 0) {
-                        console.log('Fetching board data for board ID:', boards[0].id);
                         const boardResponse = await fetch(`${API_BASE}/boards/${boards[0].id}`);
 
                         if (!boardResponse.ok) {
@@ -289,10 +286,8 @@
                         }
 
                         const boardData = await boardResponse.json();
-                        console.log('Board data received:', boardData);
                         setBoard(boardData);
                     } else {
-                        console.log('No boards found');
                         setError('No s\'ha trobat cap tauler');
                     }
                     setLoading(false);
@@ -345,10 +340,7 @@
 
             const addCard = async (listId, title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) => {
                 try {
-                    console.log('Adding card with all fields:', {
-                        listId, title, description, dueDate, priority,
-                        clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands
-                    }); const response = await fetch(`${API_BASE}/cards`, {
+                    const response = await fetch(`${API_BASE}/cards`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -372,7 +364,6 @@
                     }
 
                     const newCard = await response.json();
-                    console.log('Received card from API:', newCard);
 
                     const cardWithAllFields = {
                         ...newCard,
@@ -397,10 +388,6 @@
                 }
             }; const updateCard = async (cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands, newListId = null) => {
                 try {
-                    console.log('Updating card with data:', {
-                        cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands, newListId
-                    });
-
                     const response = await fetch(`${API_BASE}/cards/${cardId}`, {
                         method: 'PUT',
                         headers: {
@@ -419,9 +406,6 @@
                         })
                     });
 
-                    console.log('Update response status:', response.status);
-                    console.log('Update response ok:', response.ok);
-
                     if (!response.ok) {
                         const errorText = await response.text();
                         console.error('Update response error:', errorText);
@@ -429,11 +413,9 @@
                     }
 
                     const result = await response.json();
-                    console.log('Update response data:', result);
 
                     // If the list has changed, move the card to the new list
                     if (newListId && newListId !== board.lists.find(list => list.cards.some(card => card.id === cardId))?.id) {
-                        console.log('Moving card to new list:', newListId);
                         await moveCard(cardId, newListId, 0); // Move to the top of the new list
                     }
 
@@ -1003,7 +985,14 @@
                                                             <i className="fas fa-calendar"></i>
                                                             {formatDateTimeForDisplay(card.start_datetime)}
                                                         </div>
-                                                    )}                                            <div className={`card-priority priority-${card.priority || 'medium'}`}>
+                                                    )}
+                                                    {card.worker_ids && card.worker_ids.length > 0 && (
+                                                        <div className="card-workers">
+                                                            <i className="fas fa-user"></i>
+                                                            <span>{card.worker_ids.length} treballador{card.worker_ids.length > 1 ? 's' : ''}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className={`card-priority priority-${card.priority || 'medium'}`}>
                                                         <i className="fas fa-flag"></i>
                                                         {(card.priority || 'medium').charAt(0).toUpperCase() + (card.priority || 'medium').slice(1)}
                                                     </div>
@@ -1818,8 +1807,6 @@
                 const day = String(targetDate.getDate()).padStart(2, '0');
                 const newDateStr = `${year}-${month}-${day}`;
 
-                console.log('Calendar drag drop - new date:', newDateStr); // Debug log
-
                 // Check if the date is actually different from start_datetime
                 let currentDateStr = null;
                 if (draggedCard.start_datetime) {
@@ -2448,7 +2435,7 @@
             const [clientId, setClientId] = useState('');
             const [clientSearch, setClientSearch] = useState('');
             const [clients, setClients] = useState([]);
-            const [workerId, setWorkerId] = useState('');
+            const [selectedWorkers, setSelectedWorkers] = useState([]);
             const [workerSearch, setWorkerSearch] = useState('');
             const [workers, setWorkers] = useState([]);
             const [headEquipId, setHeadEquipId] = useState('');
@@ -2466,12 +2453,9 @@
                         return;
                     }
                     try {
-                        console.log('Searching for clients with term:', clientSearch);
                         const response = await fetch(`${API_BASE}/clients/search?term=${encodeURIComponent(clientSearch)}`);
-                        console.log('Client search response status:', response.status);
                         if (response.ok) {
                             const data = await response.json();
-                            console.log('Client search results:', data);
                             setClients(data);
                         } else {
                             console.error('Client search failed:', response.status, response.statusText);
@@ -2493,13 +2477,14 @@
                         return;
                     }
                     try {
-                        console.log('Searching for workers with term:', workerSearch);
                         const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(workerSearch)}`);
-                        console.log('Worker search response status:', response.status);
                         if (response.ok) {
                             const data = await response.json();
-                            console.log('Worker search results:', data);
-                            setWorkers(data);
+                            // Filter out already selected workers
+                            const filteredWorkers = data.filter(worker =>
+                                !selectedWorkers.some(selected => selected.id === worker.id)
+                            );
+                            setWorkers(filteredWorkers);
                         } else {
                             console.error('Worker search failed:', response.status, response.statusText);
                         }
@@ -2510,7 +2495,7 @@
 
                 const timeoutId = setTimeout(searchWorkers, 300);
                 return () => clearTimeout(timeoutId);
-            }, [workerSearch]);
+            }, [workerSearch, selectedWorkers]);
 
             // Search for head equipment
             useEffect(() => {
@@ -2540,7 +2525,7 @@
                         null, // dueDate removed
                         priority,
                         clientId || null,
-                        workerId || null,
+                        selectedWorkers.length > 0 ? selectedWorkers.map(w => w.id) : null,
                         headEquipId || null,
                         startDatetime || null,
                         vehicleNumber.trim() || null,
@@ -2553,7 +2538,7 @@
                     setPriority('medium');
                     setClientId('');
                     setClientSearch('');
-                    setWorkerId('');
+                    setSelectedWorkers([]);
                     setWorkerSearch('');
                     setHeadEquipId('');
                     setHeadEquipSearch('');
@@ -2576,9 +2561,15 @@
             };
 
             const selectWorker = (worker) => {
-                setWorkerId(worker.id);
-                setWorkerSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                if (!selectedWorkers.some(selected => selected.id === worker.id)) {
+                    setSelectedWorkers([...selectedWorkers, worker]);
+                }
+                setWorkerSearch('');
                 setWorkers([]);
+            };
+
+            const removeWorker = (workerId) => {
+                setSelectedWorkers(selectedWorkers.filter(worker => worker.id !== workerId));
             };
 
             const selectHeadEquip = (worker) => {
@@ -2651,8 +2642,25 @@
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Treballador:</label>
+                                    <label>Treballadors:</label>
                                     <div className="search-container">
+                                        {selectedWorkers.length > 0 && (
+                                            <div className="selected-tags">
+                                                {selectedWorkers.map(worker => (
+                                                    <div key={worker.id} className="tag">
+                                                        <span>{worker.name}{worker.position ? ` - ${worker.position}` : ''}</span>
+                                                        <button
+                                                            type="button"
+                                                            className="tag-remove"
+                                                            onClick={() => removeWorker(worker.id)}
+                                                            aria-label="Remove worker"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                         <input
                                             type="text"
                                             placeholder="Cercar treballador..."
@@ -2783,8 +2791,8 @@
             const [clientId, setClientId] = useState(card.client_id || '');
             const [clientSearch, setClientSearch] = useState(card.client_name ? `${card.client_name}${card.client_company ? ` (${card.client_company})` : ''}` : '');
             const [clients, setClients] = useState([]);
-            const [workerId, setWorkerId] = useState(card.worker_id || '');
-            const [workerSearch, setWorkerSearch] = useState(card.worker_name ? `${card.worker_name}${card.worker_position ? ` - ${card.worker_position}` : ''}` : '');
+            const [selectedWorkers, setSelectedWorkers] = useState([]);
+            const [workerSearch, setWorkerSearch] = useState('');
             const [workers, setWorkers] = useState([]);
             const [headEquipId, setHeadEquipId] = useState(card.head_equip_id || '');
             const [headEquipSearch, setHeadEquipSearch] = useState(card.head_equip_name ? `${card.head_equip_name}${card.head_equip_position ? ` - ${card.head_equip_position}` : ''}` : '');
@@ -2792,6 +2800,30 @@
             const [startDatetime, setStartDatetime] = useState(formatDateTimeForInput(card.start_datetime) || '');
             const [vehicleNumber, setVehicleNumber] = useState(card.vehicle_number || '');
             const [commands, setCommands] = useState(card.commands || '');
+
+            // Initialize selected workers from card data
+            useEffect(() => {
+                const initializeWorkers = async () => {
+                    if (card.worker_ids && card.worker_ids.length > 0) {
+                        try {
+                            const response = await fetch(`${API_BASE}/workers/by-ids`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ workerIds: card.worker_ids }),
+                            });
+                            if (response.ok) {
+                                const workerData = await response.json();
+                                setSelectedWorkers(workerData);
+                            }
+                        } catch (err) {
+                            console.error('Error fetching worker details:', err);
+                        }
+                    }
+                };
+                initializeWorkers();
+            }, [card.worker_ids]);
 
             // Search for clients
             useEffect(() => {
@@ -2826,7 +2858,11 @@
                         const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(workerSearch)}`);
                         if (response.ok) {
                             const data = await response.json();
-                            setWorkers(data);
+                            // Filter out already selected workers
+                            const filteredWorkers = data.filter(worker =>
+                                !selectedWorkers.some(selected => selected.id === worker.id)
+                            );
+                            setWorkers(filteredWorkers);
                         }
                     } catch (err) {
                         console.error('Error searching workers:', err);
@@ -2835,7 +2871,7 @@
 
                 const timeoutId = setTimeout(searchWorkers, 300);
                 return () => clearTimeout(timeoutId);
-            }, [workerSearch]);
+            }, [workerSearch, selectedWorkers]);
 
             // Search for head equipment
             useEffect(() => {
@@ -2867,7 +2903,7 @@
                             description.trim(),
                             priority,
                             clientId || null,
-                            workerId || null,
+                            selectedWorkers.length > 0 ? selectedWorkers.map(w => w.id) : null,
                             headEquipId || null,
                             startDatetime || null,
                             vehicleNumber.trim() || null,
@@ -2882,7 +2918,7 @@
                             description.trim(),
                             priority,
                             clientId || null,
-                            workerId || null,
+                            selectedWorkers.length > 0 ? selectedWorkers.map(w => w.id) : null,
                             headEquipId || null,
                             startDatetime || null,
                             vehicleNumber.trim() || null,
@@ -2909,9 +2945,15 @@
             };
 
             const selectWorker = (worker) => {
-                setWorkerId(worker.id);
-                setWorkerSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                if (!selectedWorkers.some(selected => selected.id === worker.id)) {
+                    setSelectedWorkers([...selectedWorkers, worker]);
+                }
+                setWorkerSearch('');
                 setWorkers([]);
+            };
+
+            const removeWorker = (workerId) => {
+                setSelectedWorkers(selectedWorkers.filter(worker => worker.id !== workerId));
             };
 
             const selectHeadEquip = (worker) => {
@@ -2982,8 +3024,25 @@
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Treballador:</label>
+                                    <label>Treballadors:</label>
                                     <div className="search-container">
+                                        {selectedWorkers.length > 0 && (
+                                            <div className="selected-tags">
+                                                {selectedWorkers.map(worker => (
+                                                    <div key={worker.id} className="tag">
+                                                        <span>{worker.name}{worker.position ? ` - ${worker.position}` : ''}</span>
+                                                        <button
+                                                            type="button"
+                                                            className="tag-remove"
+                                                            onClick={() => removeWorker(worker.id)}
+                                                            aria-label="Remove worker"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                         <input
                                             type="text"
                                             placeholder="Cercar treballador..."
@@ -3115,6 +3174,83 @@
             const [description, setDescription] = useState('');
             const [selectedList, setSelectedList] = useState(lists[0]?.id || '');
             const [priority, setPriority] = useState('medium');
+            const [clientId, setClientId] = useState('');
+            const [clientSearch, setClientSearch] = useState('');
+            const [clients, setClients] = useState([]);
+            const [selectedWorkers, setSelectedWorkers] = useState([]);
+            const [workerSearch, setWorkerSearch] = useState('');
+            const [workers, setWorkers] = useState([]);
+            const [headEquipId, setHeadEquipId] = useState('');
+            const [headEquipSearch, setHeadEquipSearch] = useState('');
+            const [headEquipList, setHeadEquipList] = useState([]);
+            const [vehicleNumber, setVehicleNumber] = useState('');
+            const [commands, setCommands] = useState('');
+
+            // Search for clients
+            useEffect(() => {
+                const searchClients = async () => {
+                    if (!clientSearch.trim()) {
+                        setClients([]);
+                        return;
+                    }
+                    try {
+                        const response = await fetch(`${API_BASE}/clients/search?term=${encodeURIComponent(clientSearch)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setClients(data);
+                        }
+                    } catch (err) {
+                        console.error('Error searching clients:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchClients, 300);
+                return () => clearTimeout(timeoutId);
+            }, [clientSearch]);
+
+            // Search for workers
+            useEffect(() => {
+                const searchWorkers = async () => {
+                    if (!workerSearch.trim()) {
+                        setWorkers([]);
+                        return;
+                    }
+                    try {
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(workerSearch)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            // Filter out already selected workers
+                            const filteredWorkers = data.filter(worker =>
+                                !selectedWorkers.some(selected => selected.id === worker.id)
+                            );
+                            setWorkers(filteredWorkers);
+                        }
+                    } catch (err) {
+                        console.error('Error searching workers:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchWorkers, 300);
+                return () => clearTimeout(timeoutId);
+            }, [workerSearch, selectedWorkers]);
+
+            // Search for head equipment
+            useEffect(() => {
+                const searchHeadEquip = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}&role=head_equip`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setHeadEquipList(data);
+                        }
+                    } catch (err) {
+                        console.error('Error searching head equipment:', err);
+                    }
+                };
+
+                const timeoutId = setTimeout(searchHeadEquip, 300);
+                return () => clearTimeout(timeoutId);
+            }, [headEquipSearch]);
 
             const formatDateForDisplay = (date) => {
                 // Use local date methods to avoid timezone issues
@@ -3126,22 +3262,32 @@
                 });
             };
 
-            const formatDateForInput = (date) => {
-                // IMPORTANT: Use local date methods to avoid timezone conversion
+            const formatDateTimeForInput = (date) => {
+                // Format for datetime-local input
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
+                return `${year}-${month}-${day}T08:00`; // Default to 8:00 AM
             };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (title.trim() && selectedList) {
-                    const dueDate = formatDateForInput(selectedDate);
-                    console.log('Calendar modal - selectedDate:', selectedDate);
-                    console.log('Calendar modal - formatted dueDate:', dueDate);
+                    const startDatetime = formatDateTimeForInput(selectedDate);
 
-                    await onSave(parseInt(selectedList), title.trim(), description.trim(), dueDate, priority);
+                    await onSave(
+                        parseInt(selectedList),
+                        title.trim(),
+                        description.trim(),
+                        null, // dueDate - not used in new API
+                        priority,
+                        clientId || null,
+                        selectedWorkers.length > 0 ? selectedWorkers.map(w => w.id) : null,
+                        headEquipId || null,
+                        startDatetime,
+                        vehicleNumber.trim() || null,
+                        commands.trim() || null
+                    );
                     onClose();
                 }
             };
@@ -3150,6 +3296,30 @@
                 if (e.target === e.currentTarget) {
                     onClose();
                 }
+            };
+
+            const selectClient = (client) => {
+                setClientId(client.id);
+                setClientSearch(`${client.name}${client.company ? ` (${client.company})` : ''}`);
+                setClients([]);
+            };
+
+            const selectWorker = (worker) => {
+                if (!selectedWorkers.some(selected => selected.id === worker.id)) {
+                    setSelectedWorkers([...selectedWorkers, worker]);
+                }
+                setWorkerSearch('');
+                setWorkers([]);
+            };
+
+            const removeWorker = (workerId) => {
+                setSelectedWorkers(selectedWorkers.filter(worker => worker.id !== workerId));
+            };
+
+            const selectHeadEquip = (worker) => {
+                setHeadEquipId(worker.id);
+                setHeadEquipSearch(`${worker.name}${worker.position ? ` - ${worker.position}` : ''}`);
+                setHeadEquipList([]);
             };
 
             return (
@@ -3186,28 +3356,149 @@
                                 />
                             </div>
 
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Client:</label>
+                                    <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar client..."
+                                            value={clientSearch}
+                                            onChange={(e) => setClientSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
+                                        {clients.length > 0 && clientSearch && (
+                                            <div className="search-results">
+                                                {clients.map(client => (
+                                                    <div
+                                                        key={client.id}
+                                                        className="search-result-item"
+                                                        onClick={() => selectClient(client)}
+                                                    >
+                                                        {client.name}{client.company ? ` (${client.company})` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Treballadors:</label>
+                                    <div className="search-container">
+                                        {selectedWorkers.length > 0 && (
+                                            <div className="selected-tags">
+                                                {selectedWorkers.map(worker => (
+                                                    <div key={worker.id} className="tag">
+                                                        <span>{worker.name}{worker.position ? ` - ${worker.position}` : ''}</span>
+                                                        <button
+                                                            type="button"
+                                                            className="tag-remove"
+                                                            onClick={() => removeWorker(worker.id)}
+                                                            aria-label="Remove worker"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar treballador..."
+                                            value={workerSearch}
+                                            onChange={(e) => setWorkerSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
+                                        {workers.length > 0 && workerSearch && (
+                                            <div className="search-results">
+                                                {workers.map(worker => (
+                                                    <div
+                                                        key={worker.id}
+                                                        className="search-result-item"
+                                                        onClick={() => selectWorker(worker)}
+                                                    >
+                                                        {worker.name}{worker.position ? ` - ${worker.position}` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="form-group">
-                                <label>Descripció:</label>
+                                <label>Cap d'Equip:</label>
+                                <div className="search-container">
+                                    <input
+                                        type="text"
+                                        placeholder="Cercar cap d'equip..."
+                                        value={headEquipSearch}
+                                        onChange={(e) => setHeadEquipSearch(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                    {headEquipList.length > 0 && headEquipSearch && (
+                                        <div className="search-results">
+                                            {headEquipList.map(worker => (
+                                                <div
+                                                    key={worker.id}
+                                                    className="search-result-item"
+                                                    onClick={() => selectHeadEquip(worker)}
+                                                >
+                                                    {worker.name}{worker.position ? ` - ${worker.position}` : ''}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Vehicle:</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Número o nom del vehicle"
+                                        value={vehicleNumber}
+                                        onChange={(e) => setVehicleNumber(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Prioritat:</label>
+                                    <select
+                                        value={priority}
+                                        onChange={(e) => setPriority(e.target.value)}
+                                        className="modal-select"
+                                    >
+                                        <option value="low">Baixa</option>
+                                        <option value="medium">Mitjana</option>
+                                        <option value="high">Alta</option>
+                                        <option value="urgent">Urgent</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Comandaments (Tasques):</label>
                                 <textarea
-                                    placeholder="Descripció de la tasca (opcional)"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Descriure les tasques que s'han de fer..."
+                                    value={commands}
+                                    onChange={(e) => setCommands(e.target.value)}
                                     className="modal-textarea"
+                                    rows="3"
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label>Prioritat:</label>
-                                <select
-                                    value={priority}
-                                    onChange={(e) => setPriority(e.target.value)}
-                                    className="modal-select"
-                                >
-                                    <option value="low">Baixa</option>
-                                    <option value="medium">Mitjana</option>
-                                    <option value="high">Alta</option>
-                                    <option value="urgent">Urgent</option>
-                                </select>
+                                <label>Descripció:</label>
+                                <textarea
+                                    placeholder="Descripció addicional (opcional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="2"
+                                />
                             </div>
 
                             <div className="modal-buttons">

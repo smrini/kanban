@@ -178,7 +178,7 @@ function initializeDatabase() {
             position INT NOT NULL,
             priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
             client_id INT,
-            worker_id INT,
+            worker_id TEXT,
             head_equip_id INT,
             start_datetime DATETIME,
             vehicle_number VARCHAR(100),
@@ -186,7 +186,6 @@ function initializeDatabase() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE,
             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
-            FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL,
             FOREIGN KEY (head_equip_id) REFERENCES workers(id) ON DELETE SET NULL
         )
     `,
@@ -205,86 +204,6 @@ function initializeDatabase() {
 			createDefaultData();
 		}
 	});
-
-	// Migrate existing cards table to add new columns
-	const migrateCardsTable = () => {
-		// Check which columns exist and add missing ones
-		db.query("DESCRIBE cards", (err, columns) => {
-			if (err) {
-				console.log("Cards table migration check failed:", err.message);
-				return;
-			}
-
-			const existingColumns = columns.map((col) => col.Field);
-			const requiredColumns = [
-				{
-					name: "client_id",
-					sql: "ALTER TABLE cards ADD COLUMN client_id INT",
-				},
-				{
-					name: "worker_id",
-					sql: "ALTER TABLE cards ADD COLUMN worker_id INT",
-				},
-				{
-					name: "head_equip_id",
-					sql: "ALTER TABLE cards ADD COLUMN head_equip_id INT",
-				},
-				{
-					name: "start_datetime",
-					sql: "ALTER TABLE cards ADD COLUMN start_datetime DATETIME",
-				},
-				{
-					name: "vehicle_number",
-					sql: "ALTER TABLE cards ADD COLUMN vehicle_number VARCHAR(100)",
-				},
-				{
-					name: "commands",
-					sql: "ALTER TABLE cards ADD COLUMN commands TEXT",
-				},
-			];
-
-			// Add missing columns
-			requiredColumns.forEach((column) => {
-				if (!existingColumns.includes(column.name)) {
-					db.query(column.sql, (err) => {
-						if (err) {
-							console.log(
-								`Migration note - adding ${column.name}:`,
-								err.message
-							);
-						} else {
-							console.log(
-								`Successfully added column: ${column.name}`
-							);
-						}
-					});
-				}
-			});
-
-			// Add foreign key constraints (with error handling for existing constraints)
-			setTimeout(() => {
-				const constraints = [
-					"ALTER TABLE cards ADD CONSTRAINT fk_cards_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL",
-					"ALTER TABLE cards ADD CONSTRAINT fk_cards_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL",
-					"ALTER TABLE cards ADD CONSTRAINT fk_cards_head_equip FOREIGN KEY (head_equip_id) REFERENCES workers(id) ON DELETE SET NULL",
-				];
-
-				constraints.forEach((constraint, index) => {
-					db.query(constraint, (err) => {
-						if (err && !err.message.includes("Duplicate")) {
-							console.log(
-								`Foreign key constraint ${index + 1} note:`,
-								err.message
-							);
-						}
-					});
-				});
-			}, 1000); // Wait for column additions to complete
-		});
-	};
-
-	// Run migration after a short delay to ensure tables are created
-	setTimeout(migrateCardsTable, 500);
 }
 
 function createDefaultData() {
@@ -367,20 +286,62 @@ app.get("/api/boards/:id", (req, res) => {
 							db.query(
 								`SELECT c.*, 
 									cl.name as client_name, cl.company as client_company,
-									w.name as worker_name, w.position as worker_position,
 									he.name as head_equip_name, he.position as head_equip_position
 								FROM cards c
 								LEFT JOIN clients cl ON c.client_id = cl.id
-								LEFT JOIN workers w ON c.worker_id = w.id  
 								LEFT JOIN workers he ON c.head_equip_id = he.id
 								WHERE c.list_id = ? ORDER BY c.position`,
 								[list.id],
 								(err, cards) => {
 									if (err) reject(err);
 									else {
+										// Process each card to handle worker_id array
+										const processedCards = cards.map(
+											(card) => {
+												let workerIds = [];
+												try {
+													if (card.worker_id) {
+														// Try to parse as JSON array, fallback to single ID
+														if (
+															card.worker_id.startsWith(
+																"["
+															)
+														) {
+															workerIds =
+																JSON.parse(
+																	card.worker_id
+																);
+														} else {
+															workerIds = [
+																parseInt(
+																	card.worker_id
+																),
+															];
+														}
+													}
+												} catch (e) {
+													// If parsing fails, treat as single ID
+													if (card.worker_id) {
+														workerIds = [
+															parseInt(
+																card.worker_id
+															),
+														];
+													}
+												}
+
+												const processedCard = {
+													...card,
+													worker_ids: workerIds,
+												};
+
+												return processedCard;
+											}
+										);
+
 										resolve({
 											...list,
-											cards: cards,
+											cards: processedCards,
 										});
 									}
 								}
@@ -468,19 +429,6 @@ app.post("/api/cards", (req, res) => {
 		commands,
 	} = req.body;
 
-	console.log("Received card creation request:", {
-		list_id,
-		title,
-		description,
-		priority,
-		client_id,
-		worker_id,
-		head_equip_id,
-		start_datetime,
-		vehicle_number,
-		commands,
-	});
-
 	// Get the next position
 	db.query(
 		"SELECT COALESCE(MAX(position), -1) + 1 as nextPos FROM cards WHERE list_id = ?",
@@ -515,7 +463,12 @@ app.post("/api/cards", (req, res) => {
 				}
 			}
 
-			console.log("Start datetime:", formattedStartDatetime);
+			// Handle worker_id array - convert to JSON string if it's an array
+			let processedWorkerId = worker_id;
+			if (Array.isArray(worker_id)) {
+				processedWorkerId = JSON.stringify(worker_id);
+			}
+
 			db.query(
 				`INSERT INTO cards (
 				list_id, title, description, position, priority,
@@ -528,7 +481,7 @@ app.post("/api/cards", (req, res) => {
 					position,
 					priority || "medium",
 					client_id || null,
-					worker_id || null,
+					processedWorkerId || null,
 					head_equip_id || null,
 					formattedStartDatetime,
 					vehicle_number || null,
@@ -540,23 +493,71 @@ app.post("/api/cards", (req, res) => {
 						res.status(500).json({ error: err.message });
 						return;
 					}
-					const responseData = {
-						id: result.insertId,
-						list_id,
-						title,
-						description: description || "",
-						position,
-						priority: priority || "medium",
-						client_id: client_id || null,
-						worker_id: worker_id || null,
-						head_equip_id: head_equip_id || null,
-						start_datetime: formattedStartDatetime,
-						vehicle_number: vehicle_number || null,
-						commands: commands || null,
-					};
 
-					console.log("Returning card data:", responseData);
-					res.json(responseData);
+					// Fetch the complete card with client and head equipment names
+					const cardId = result.insertId;
+					db.query(
+						`SELECT c.*, 
+							cl.name as client_name, cl.company as client_company,
+							he.name as head_equip_name, he.position as head_equip_position
+						FROM cards c
+						LEFT JOIN clients cl ON c.client_id = cl.id
+						LEFT JOIN workers he ON c.head_equip_id = he.id
+						WHERE c.id = ?`,
+						[cardId],
+						(err, cardResults) => {
+							if (err) {
+								console.error(
+									"Error fetching complete card data:",
+									err
+								);
+								res.status(500).json({ error: err.message });
+								return;
+							}
+
+							if (cardResults.length === 0) {
+								res.status(404).json({
+									error: "Card not found after creation",
+								});
+								return;
+							}
+
+							const completeCard = cardResults[0];
+
+							// Process worker_id to worker_ids array (same logic as board retrieval)
+							let workerIds = [];
+							try {
+								if (completeCard.worker_id) {
+									// Try to parse as JSON array, fallback to single ID
+									if (
+										completeCard.worker_id.startsWith("[")
+									) {
+										workerIds = JSON.parse(
+											completeCard.worker_id
+										);
+									} else {
+										workerIds = [
+											parseInt(completeCard.worker_id),
+										];
+									}
+								}
+							} catch (e) {
+								// If parsing fails, treat as single ID
+								if (completeCard.worker_id) {
+									workerIds = [
+										parseInt(completeCard.worker_id),
+									];
+								}
+							}
+
+							const responseData = {
+								...completeCard,
+								worker_ids: workerIds, // Add processed worker_ids array
+							};
+
+							res.json(responseData);
+						}
+					);
 				}
 			);
 		}
@@ -712,8 +713,6 @@ app.put("/api/cards/:id", (req, res) => {
 	const cardId = req.params.id;
 	const updates = req.body;
 
-	console.log("Received card update request:", { cardId, updates });
-
 	// Get current card data first
 	db.query("SELECT * FROM cards WHERE id = ?", [cardId], (err, results) => {
 		if (err) {
@@ -728,7 +727,6 @@ app.put("/api/cards/:id", (req, res) => {
 		}
 
 		const currentCard = results[0];
-		console.log("Current card data:", currentCard);
 
 		// Merge current data with updates
 		const updatedData = {
@@ -792,7 +790,11 @@ app.put("/api/cards/:id", (req, res) => {
 			}
 		}
 
-		console.log("Start datetime:", formattedStartDatetime);
+		// Handle worker_id array - convert to JSON string if it's an array
+		let processedWorkerId = updatedData.worker_id;
+		if (Array.isArray(updatedData.worker_id)) {
+			processedWorkerId = JSON.stringify(updatedData.worker_id);
+		}
 
 		db.query(
 			`UPDATE cards SET 
@@ -805,7 +807,7 @@ app.put("/api/cards/:id", (req, res) => {
 				updatedData.description || "",
 				updatedData.priority || "medium",
 				updatedData.client_id || null,
-				updatedData.worker_id || null,
+				processedWorkerId || null,
 				updatedData.head_equip_id || null,
 				formattedStartDatetime,
 				updatedData.vehicle_number || null,
@@ -818,7 +820,6 @@ app.put("/api/cards/:id", (req, res) => {
 					res.status(500).json({ error: err.message });
 					return;
 				}
-				console.log("Card updated successfully");
 				res.json({
 					success: true,
 				});
@@ -1112,32 +1113,14 @@ app.put("/api/clients/:id", (req, res) => {
 				}
 				return;
 			}
-			if (result.affectedRows === 0) {
-				res.status(404).json({ error: "Client not found" });
-				return;
-			}
-			res.json({ success: true });
-		}
-	);
-});
-
-// Delete client
-app.delete("/api/clients/:id", (req, res) => {
-	const clientId = req.params.id;
-
-	db.query(
-		"DELETE FROM clients WHERE id = ?",
-		[clientId],
-		function (err, result) {
-			if (err) {
-				res.status(500).json({ error: err.message });
-				return;
-			}
-			if (result.affectedRows === 0) {
-				res.status(404).json({ error: "Client not found" });
-				return;
-			}
-			res.json({ success: true });
+			res.json({
+				id: result.insertId,
+				name,
+				email,
+				phone,
+				company,
+				client_id: clientId,
+			});
 		}
 	);
 });
@@ -1177,7 +1160,7 @@ app.get("/api/workers", (req, res) => {
 // Get workers for search (simplified) - MUST come before /:id route
 app.get("/api/workers/search", (req, res) => {
 	const { term, role } = req.query;
-	let query = "SELECT id, name, position, department FROM workers";
+	let query = "SELECT id, name, position FROM workers";
 	let params = [];
 
 	if (term) {
@@ -1186,13 +1169,12 @@ app.get("/api/workers/search", (req, res) => {
 	}
 
 	if (role === "head_equip") {
-		// For head equipment, you might want to filter by certain positions
 		if (term) {
 			query +=
-				" AND (position LIKE '%cap%' OR position LIKE '%head%' OR position LIKE '%supervisor%' OR position LIKE '%responsable%')";
+				" AND position LIKE '%supervisor%' OR position LIKE '%manager%' OR position LIKE '%lead%' OR position LIKE '%head%'";
 		} else {
 			query +=
-				" WHERE (position LIKE '%cap%' OR position LIKE '%head%' OR position LIKE '%supervisor%' OR position LIKE '%responsable%')";
+				" WHERE position LIKE '%supervisor%' OR position LIKE '%manager%' OR position LIKE '%lead%' OR position LIKE '%head%'";
 		}
 	}
 
@@ -1285,7 +1267,10 @@ app.put("/api/workers/:id", (req, res) => {
 	}
 
 	db.query(
-		`UPDATE workers SET name = ?, email = ?, phone = ?, position = ?, department = ?, address = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+		`UPDATE workers SET 
+		 name = ?, email = ?, phone = ?, position = ?, 
+		 department = ?, address = ?, notes = ?, 
+		 updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ?`,
 		[
 			name,
@@ -1297,17 +1282,13 @@ app.put("/api/workers/:id", (req, res) => {
 			notes || null,
 			workerId,
 		],
-		function (err, result) {
+		function (err) {
 			if (err) {
 				if (err.code === "ER_DUP_ENTRY") {
 					res.status(400).json({ error: "Email already exists" });
 				} else {
 					res.status(500).json({ error: err.message });
 				}
-				return;
-			}
-			if (result.affectedRows === 0) {
-				res.status(404).json({ error: "Worker not found" });
 				return;
 			}
 			res.json({ success: true });
@@ -1319,116 +1300,41 @@ app.put("/api/workers/:id", (req, res) => {
 app.delete("/api/workers/:id", (req, res) => {
 	const workerId = req.params.id;
 
-	db.query(
-		"DELETE FROM workers WHERE id = ?",
-		[workerId],
-		function (err, result) {
-			if (err) {
-				res.status(500).json({ error: err.message });
-				return;
-			}
-			if (result.affectedRows === 0) {
-				res.status(404).json({ error: "Worker not found" });
-				return;
-			}
-			res.json({ success: true });
-		}
-	);
-});
-
-// Get departments for dropdown
-app.get("/api/departments", (req, res) => {
-	db.query(
-		"SELECT DISTINCT department FROM workers WHERE department IS NOT NULL AND department != '' ORDER BY department",
-		(err, results) => {
-			if (err) {
-				res.status(500).json({ error: err.message });
-				return;
-			}
-			res.json(results.map((row) => row.department));
-		}
-	);
-});
-
-// Debug endpoints to check data
-app.get("/api/debug/clients", (req, res) => {
-	db.query("SELECT COUNT(*) as count FROM clients", (err, results) => {
+	db.query("DELETE FROM workers WHERE id = ?", [workerId], function (err) {
 		if (err) {
 			res.status(500).json({ error: err.message });
 			return;
 		}
-		res.json({ count: results[0].count });
+		res.json({ success: true });
 	});
 });
 
-app.get("/api/debug/workers", (req, res) => {
-	db.query("SELECT COUNT(*) as count FROM workers", (err, results) => {
+// Get workers by IDs (for multiple worker selection)
+app.post("/api/workers/by-ids", (req, res) => {
+	const { workerIds, worker_ids } = req.body;
+	const ids = workerIds || worker_ids; // Support both formats
+
+	if (!ids || !Array.isArray(ids) || ids.length === 0) {
+		res.json([]);
+		return;
+	}
+
+	const placeholders = ids.map(() => "?").join(",");
+	const query = `SELECT id, name, position FROM workers WHERE id IN (${placeholders})`;
+
+	db.query(query, ids, (err, results) => {
 		if (err) {
+			console.error("Error fetching workers by IDs:", err);
 			res.status(500).json({ error: err.message });
 			return;
 		}
-		res.json({ count: results[0].count });
+		res.json(results);
 	});
-});
-
-// Debug endpoint to see all clients
-app.get("/api/debug/all-clients", (req, res) => {
-	db.query(
-		"SELECT id, name, company FROM clients ORDER BY name",
-		(err, results) => {
-			if (err) {
-				res.status(500).json({ error: err.message });
-				return;
-			}
-			res.json(results);
-		}
-	);
-});
-
-// Debug endpoint to see all workers
-app.get("/api/debug/all-workers", (req, res) => {
-	db.query(
-		"SELECT id, name, position, department FROM workers ORDER BY name",
-		(err, results) => {
-			if (err) {
-				res.status(500).json({ error: err.message });
-				return;
-			}
-			res.json(results);
-		}
-	);
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
 	console.log(`Kanban server running on port ${PORT}`);
 	console.log(`Environment: ${NODE_ENV}`);
-	if (NODE_ENV === "development") {
-		console.log(`Visit: http://localhost:${PORT}`);
-	}
-});
-
-// Graceful shutdown
-process.on("SIGINT", () => {
-	console.log("\nShutting down server...");
-	db.end((err) => {
-		if (err) {
-			console.error(err.message);
-		} else {
-			console.log("Database connection closed.");
-		}
-		process.exit(0);
-	});
-});
-
-process.on("SIGTERM", () => {
-	console.log("SIGTERM received, shutting down gracefully");
-	db.end((err) => {
-		if (err) {
-			console.error(err.message);
-		} else {
-			console.log("Database connection closed.");
-		}
-		process.exit(0);
-	});
+	console.log(`Visit: http://localhost:${PORT}`);
 });
