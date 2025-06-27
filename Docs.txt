@@ -22,7 +22,6 @@
     * Done: Update the Cards model to contain the new info (client, worker, head equip, start datetime, vehicle, commands)
     * Done: Remove "Data Límit" field from card forms and make layout more compact
     * Done: Update both AddCardModal and EditCardModal with all new fields and search functionality
-
 */
 
 // !issue
