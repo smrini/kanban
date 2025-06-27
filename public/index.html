@@ -395,10 +395,10 @@
                     console.error('Error adding card:', err);
                     setError('Failed to add card');
                 }
-            }; const updateCard = async (cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) => {
+            }; const updateCard = async (cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands, newListId = null) => {
                 try {
                     console.log('Updating card with data:', {
-                        cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands
+                        cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands, newListId
                     });
 
                     const response = await fetch(`${API_BASE}/cards/${cardId}`, {
@@ -430,6 +430,12 @@
 
                     const result = await response.json();
                     console.log('Update response data:', result);
+
+                    // If the list has changed, move the card to the new list
+                    if (newListId && newListId !== board.lists.find(list => list.cards.some(card => card.id === cardId))?.id) {
+                        console.log('Moving card to new list:', newListId);
+                        await moveCard(cardId, newListId, 0); // Move to the top of the new list
+                    }
 
                     // Refresh the board to get updated card with client/worker names
                     if (board && board.id) {
@@ -1027,8 +1033,11 @@
 
                     {showAddCard && (
                         <AddCardModal
-                            onSave={(title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) =>
-                                addCard(showAddCard, title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands)
+                            board={board}
+                            defaultListId={showAddCard}
+                            showListSelection={false}
+                            onSave={(listId, title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) =>
+                                addCard(listId, title, description, dueDate, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands)
                             }
                             onClose={() => setShowAddCard(null)}
                         />
@@ -1037,6 +1046,7 @@
                     {editingCard && (
                         <EditCardModal
                             card={editingCard}
+                            board={board}
                             onSave={updateCard}
                             onDelete={deleteCard}
                             onClose={() => setEditingCard(null)}
@@ -1647,13 +1657,46 @@
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
-                const dateStr = `${year}-${month}-${day}`; return getAllCards().filter(card => {
+                const dateStr = `${year}-${month}-${day}`; const cardsForDate = getAllCards().filter(card => {
                     if (!card.start_datetime) return false;
                     // Extract just the date part from start_datetime
                     const cardDateStr = card.start_datetime.includes('T')
                         ? card.start_datetime.split('T')[0]
                         : card.start_datetime.split(' ')[0]; // Handle 'YYYY-MM-DD HH:mm:ss' format too
                     return cardDateStr === dateStr;
+                });
+
+                // Sort cards by time
+                return cardsForDate.sort((a, b) => {
+                    // Extract time from start_datetime
+                    const getTimeFromDateTime = (dateTimeStr) => {
+                        if (!dateTimeStr) return '00:00'; // Default time for cards without time
+
+                        let timeStr;
+                        if (dateTimeStr.includes('T')) {
+                            // ISO format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm
+                            timeStr = dateTimeStr.split('T')[1];
+                            if (timeStr.includes('.')) {
+                                timeStr = timeStr.split('.')[0]; // Remove milliseconds
+                            }
+                            if (timeStr.includes('+') || timeStr.includes('Z')) {
+                                timeStr = timeStr.replace(/[+Z].*$/, ''); // Remove timezone info
+                            }
+                        } else if (dateTimeStr.includes(' ')) {
+                            // MySQL format: YYYY-MM-DD HH:mm:ss
+                            timeStr = dateTimeStr.split(' ')[1];
+                        } else {
+                            return '00:00'; // No time component
+                        }
+
+                        // Return just HH:mm for comparison
+                        return timeStr.substring(0, 5);
+                    };
+
+                    const timeA = getTimeFromDateTime(a.start_datetime);
+                    const timeB = getTimeFromDateTime(b.start_datetime);
+
+                    return timeA.localeCompare(timeB);
                 });
             };
 
@@ -2006,7 +2049,29 @@
                                                     title={`${card.title} (${card.listName}) - Drag to move to another date`}
                                                 >
                                                     <div className="calendar-card-title">{card.title}</div>
-                                                    <div className="calendar-card-list">{card.listName}</div>
+                                                    <div className="calendar-card-list">
+                                                        {card.listName}
+                                                        {card.start_datetime && (() => {
+                                                            // Extract and format time
+                                                            let timeStr = '';
+                                                            if (card.start_datetime.includes('T')) {
+                                                                timeStr = card.start_datetime.split('T')[1];
+                                                                if (timeStr.includes('.')) {
+                                                                    timeStr = timeStr.split('.')[0];
+                                                                }
+                                                                if (timeStr.includes('+') || timeStr.includes('Z')) {
+                                                                    timeStr = timeStr.replace(/[+Z].*$/, '');
+                                                                }
+                                                            } else if (card.start_datetime.includes(' ')) {
+                                                                timeStr = card.start_datetime.split(' ')[1];
+                                                            }
+
+                                                            if (timeStr && timeStr !== '00:00:00') {
+                                                                return ` • ${timeStr.substring(0, 5)}`;
+                                                            }
+                                                            return '';
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -2375,9 +2440,10 @@
             );
         }
 
-        function AddCardModal({ onSave, onClose }) {
+        function AddCardModal({ board, defaultListId, showListSelection = true, onSave, onClose }) {
             const [title, setTitle] = useState('');
             const [description, setDescription] = useState('');
+            const [selectedListId, setSelectedListId] = useState(defaultListId || (board?.lists?.[0]?.id || ''));
             const [priority, setPriority] = useState('medium');
             const [clientId, setClientId] = useState('');
             const [clientSearch, setClientSearch] = useState('');
@@ -2466,8 +2532,9 @@
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                if (title.trim()) {
+                if (title.trim() && selectedListId) {
                     onSave(
+                        selectedListId,
                         title.trim(),
                         description.trim(),
                         null, // dueDate removed
@@ -2482,6 +2549,7 @@
                     // Reset form
                     setTitle('');
                     setDescription('');
+                    setSelectedListId(defaultListId || (board?.lists?.[0]?.id || ''));
                     setPriority('medium');
                     setClientId('');
                     setClientSearch('');
@@ -2524,6 +2592,24 @@
                     <div className="modal-content wide">
                         <h3>Afegir Nova Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
+                            {showListSelection && (
+                                <div className="form-group">
+                                    <label>Llista:</label>
+                                    <select
+                                        value={selectedListId}
+                                        onChange={(e) => setSelectedListId(e.target.value)}
+                                        className="modal-select"
+                                        required
+                                    >
+                                        {board?.lists?.map(list => (
+                                            <option key={list.id} value={list.id}>
+                                                {list.title}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             <div className="form-group">
                                 <label>Títol de la Targeta:</label>
                                 <input
@@ -2689,9 +2775,10 @@
             );
         }
 
-        function EditCardModal({ card, onSave, onDelete, onClose }) {
+        function EditCardModal({ card, board, onSave, onDelete, onClose }) {
             const [title, setTitle] = useState(card.title);
             const [description, setDescription] = useState(card.description || '');
+            const [selectedListId, setSelectedListId] = useState(card.list_id);
             const [priority, setPriority] = useState(card.priority || 'medium');
             const [clientId, setClientId] = useState(card.client_id || '');
             const [clientSearch, setClientSearch] = useState(card.client_name ? `${card.client_name}${card.client_company ? ` (${card.client_company})` : ''}` : '');
@@ -2771,18 +2858,37 @@
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (title.trim()) {
-                    onSave(
-                        card.id,
-                        title.trim(),
-                        description.trim(),
-                        priority,
-                        clientId || null,
-                        workerId || null,
-                        headEquipId || null,
-                        startDatetime || null,
-                        vehicleNumber.trim() || null,
-                        commands.trim() || null
-                    );
+                    // Check if the list has changed
+                    if (selectedListId !== card.list_id) {
+                        // First update the card, then move it
+                        onSave(
+                            card.id,
+                            title.trim(),
+                            description.trim(),
+                            priority,
+                            clientId || null,
+                            workerId || null,
+                            headEquipId || null,
+                            startDatetime || null,
+                            vehicleNumber.trim() || null,
+                            commands.trim() || null,
+                            selectedListId // Pass the new list ID
+                        );
+                    } else {
+                        // Just update the card
+                        onSave(
+                            card.id,
+                            title.trim(),
+                            description.trim(),
+                            priority,
+                            clientId || null,
+                            workerId || null,
+                            headEquipId || null,
+                            startDatetime || null,
+                            vehicleNumber.trim() || null,
+                            commands.trim() || null
+                        );
+                    }
                 }
             };
 
@@ -2819,6 +2925,22 @@
                     <div className="modal-content wide">
                         <h3>Editar Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label>Llista:</label>
+                                <select
+                                    value={selectedListId}
+                                    onChange={(e) => setSelectedListId(e.target.value)}
+                                    className="modal-select"
+                                    required
+                                >
+                                    {board?.lists?.map(list => (
+                                        <option key={list.id} value={list.id}>
+                                            {list.title}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div className="form-group">
                                 <label>Títol de la Targeta:</label>
                                 <input
