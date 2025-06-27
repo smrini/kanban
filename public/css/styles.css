@@ -682,15 +682,11 @@ button {
 .form-row {
 	display: flex;
 	gap: 1rem;
-	margin-bottom: 1rem;
+	flex-wrap: wrap;
 }
 
 .form-row .form-group {
 	flex: 1;
-}
-
-.form-group {
-	margin-bottom: 1rem;
 }
 
 .form-group label {
@@ -1953,14 +1949,12 @@ button {
 	display: flex;
 	gap: 1rem;
 	margin-bottom: 1rem;
+	
+	
 }
 
 .form-row .form-group {
 	flex: 1;
-}
-
-.form-group {
-	margin-bottom: 1rem;
 }
 
 .form-group label {
@@ -1975,7 +1969,7 @@ button {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
-	margin-bottom: 10px;
+	margin-top: 10px;
 	padding: 8px;
 	background: var(--bg-secondary);
 	border-radius: 6px;

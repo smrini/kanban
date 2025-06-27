@@ -2743,6 +2743,17 @@
                                 />
                             </div>
 
+                            <div className="form-group">
+                                <label>Descripció:</label>
+                                <textarea
+                                    placeholder="Descripció addicional (opcional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="2"
+                                />
+                            </div>
+
                             <div className="form-row">
                                 <div className="form-group">
                                     <label>Client:</label>
@@ -2773,6 +2784,13 @@
                                 <div className="form-group">
                                     <label>Treballadors:</label>
                                     <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar treballador..."
+                                            value={workerSearch}
+                                            onChange={(e) => setWorkerSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
                                         {selectedWorkers.length > 0 && (
                                             <div className="selected-tags">
                                                 {selectedWorkers.map(worker => (
@@ -2790,13 +2808,6 @@
                                                 ))}
                                             </div>
                                         )}
-                                        <input
-                                            type="text"
-                                            placeholder="Cercar treballador..."
-                                            value={workerSearch}
-                                            onChange={(e) => setWorkerSearch(e.target.value)}
-                                            className="modal-input"
-                                        />
                                         {workers.length > 0 && workerSearch && (
                                             <div className="search-results">
                                                 {workers.map(worker => (
@@ -2851,16 +2862,6 @@
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Vehicle:</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Número o nom del vehicle"
-                                        value={vehicleNumber}
-                                        onChange={(e) => setVehicleNumber(e.target.value)}
-                                        className="modal-input"
-                                    />
-                                </div>
-                                <div className="form-group">
                                     <label>Prioritat:</label>
                                     <select
                                         value={priority}
@@ -2873,6 +2874,16 @@
                                         <option value="urgent">Urgent</option>
                                     </select>
                                 </div>
+                                <div className="form-group">
+                                    <label>Vehicle:</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Número o nom del vehicle"
+                                        value={vehicleNumber}
+                                        onChange={(e) => setVehicleNumber(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                </div>
                             </div>
 
                             <div className="form-group">
@@ -2883,17 +2894,6 @@
                                     onChange={(e) => setCommands(e.target.value)}
                                     className="modal-textarea"
                                     rows="3"
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label>Descripció:</label>
-                                <textarea
-                                    placeholder="Descripció addicional (opcional)"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    className="modal-textarea"
-                                    rows="2"
                                 />
                             </div>
 
@@ -3126,6 +3126,17 @@
                                 />
                             </div>
 
+                            <div className="form-group">
+                                <label>Descripció:</label>
+                                <textarea
+                                    placeholder="Descripció addicional (opcional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="2"
+                                />
+                            </div>
+
                             <div className="form-row">
                                 <div className="form-group">
                                     <label>Client:</label>
@@ -3156,6 +3167,13 @@
                                 <div className="form-group">
                                     <label>Treballadors:</label>
                                     <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar treballador..."
+                                            value={workerSearch}
+                                            onChange={(e) => setWorkerSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
                                         {selectedWorkers.length > 0 && (
                                             <div className="selected-tags">
                                                 {selectedWorkers.map(worker => (
@@ -3173,13 +3191,6 @@
                                                 ))}
                                             </div>
                                         )}
-                                        <input
-                                            type="text"
-                                            placeholder="Cercar treballador..."
-                                            value={workerSearch}
-                                            onChange={(e) => setWorkerSearch(e.target.value)}
-                                            className="modal-input"
-                                        />
                                         {workers.length > 0 && workerSearch && (
                                             <div className="search-results">
                                                 {workers.map(worker => (
@@ -3234,28 +3245,28 @@
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Vehicle:</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Número o nom del vehicle"
-                                        value={vehicleNumber}
-                                        onChange={(e) => setVehicleNumber(e.target.value)}
-                                        className="modal-input"
-                                    />
-                                </div>
-                                <div className="form-group">
                                     <label>Prioritat:</label>
                                     <select
-                                        value={priority}
-                                        onChange={(e) => setPriority(e.target.value)}
-                                        className="modal-select"
+                                    value={priority}
+                                    onChange={(e) => setPriority(e.target.value)}
+                                    className="modal-select"
                                     >
-                                        <option value="low">Baixa</option>
-                                        <option value="medium">Mitjana</option>
-                                        <option value="high">Alta</option>
-                                        <option value="urgent">Urgent</option>
-                                    </select>
-                                </div>
+                                    <option value="low">Baixa</option>
+                                    <option value="medium">Mitjana</option>
+                                    <option value="high">Alta</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Vehicle:</label>
+                                <input
+                                    type="text"
+                                    placeholder="Número o nom del vehicle"
+                                    value={vehicleNumber}
+                                    onChange={(e) => setVehicleNumber(e.target.value)}
+                                    className="modal-input"
+                                />
+                            </div>
                             </div>
 
                             <div className="form-group">
@@ -3266,17 +3277,6 @@
                                     onChange={(e) => setCommands(e.target.value)}
                                     className="modal-textarea"
                                     rows="3"
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label>Descripció:</label>
-                                <textarea
-                                    placeholder="Descripció addicional (opcional)"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    className="modal-textarea"
-                                    rows="2"
                                 />
                             </div>
 
@@ -3485,6 +3485,17 @@
                                     required
                                 />
                             </div>
+                            
+                            <div className="form-group">
+                                <label>Descripció:</label>
+                                <textarea
+                                    placeholder="Descripció addicional (opcional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="modal-textarea"
+                                    rows="2"
+                                />
+                            </div>
 
                             <div className="form-row">
                                 <div className="form-group">
@@ -3516,6 +3527,13 @@
                                 <div className="form-group">
                                     <label>Treballadors:</label>
                                     <div className="search-container">
+                                        <input
+                                            type="text"
+                                            placeholder="Cercar treballador..."
+                                            value={workerSearch}
+                                            onChange={(e) => setWorkerSearch(e.target.value)}
+                                            className="modal-input"
+                                        />
                                         {selectedWorkers.length > 0 && (
                                             <div className="selected-tags">
                                                 {selectedWorkers.map(worker => (
@@ -3533,13 +3551,6 @@
                                                 ))}
                                             </div>
                                         )}
-                                        <input
-                                            type="text"
-                                            placeholder="Cercar treballador..."
-                                            value={workerSearch}
-                                            onChange={(e) => setWorkerSearch(e.target.value)}
-                                            className="modal-input"
-                                        />
                                         {workers.length > 0 && workerSearch && (
                                             <div className="search-results">
                                                 {workers.map(worker => (
@@ -3585,16 +3596,6 @@
 
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Vehicle:</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Número o nom del vehicle"
-                                        value={vehicleNumber}
-                                        onChange={(e) => setVehicleNumber(e.target.value)}
-                                        className="modal-input"
-                                    />
-                                </div>
-                                <div className="form-group">
                                     <label>Prioritat:</label>
                                     <select
                                         value={priority}
@@ -3607,6 +3608,16 @@
                                         <option value="urgent">Urgent</option>
                                     </select>
                                 </div>
+                                <div className="form-group">
+                                    <label>Vehicle:</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Número o nom del vehicle"
+                                        value={vehicleNumber}
+                                        onChange={(e) => setVehicleNumber(e.target.value)}
+                                        className="modal-input"
+                                    />
+                                </div>
                             </div>
 
                             <div className="form-group">
@@ -3617,17 +3628,6 @@
                                     onChange={(e) => setCommands(e.target.value)}
                                     className="modal-textarea"
                                     rows="3"
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label>Descripció:</label>
-                                <textarea
-                                    placeholder="Descripció addicional (opcional)"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    className="modal-textarea"
-                                    rows="2"
                                 />
                             </div>
 
