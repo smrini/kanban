@@ -1332,6 +1332,23 @@ app.post("/api/workers/by-ids", (req, res) => {
 	});
 });
 
+// Get unique departments for filtering
+app.get("/api/departments", (req, res) => {
+	db.query(
+		"SELECT DISTINCT department FROM workers WHERE department IS NOT NULL AND department != '' ORDER BY department",
+		(err, results) => {
+			if (err) {
+				console.error("Error fetching departments:", err);
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			// Return array of department names
+			const departments = results.map((row) => row.department);
+			res.json(departments);
+		}
+	);
+});
+
 // Start server
 const server = app.listen(PORT, () => {
 	console.log(`Kanban server running on port ${PORT}`);

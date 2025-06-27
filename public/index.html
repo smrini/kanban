@@ -180,8 +180,12 @@
             const [filters, setFilters] = useState({
                 search: '',
                 priority: 'all',
-                dueDate: 'all'
+                dueDate: 'all',
+                worker: 'all',
+                client: 'all'
             });
+            const [availableWorkers, setAvailableWorkers] = useState([]);
+            const [availableClients, setAvailableClients] = useState([]);
             const [confirmation, setConfirmation] = useState({
                 isOpen: false,
                 title: '',
@@ -217,6 +221,31 @@
             useEffect(() => {
                 localStorage.setItem('kanban-show-filters', showFilters);
             }, [showFilters]);
+
+            // Load available workers and clients for filters
+            useEffect(() => {
+                const loadWorkersAndClients = async () => {
+                    try {
+                        // Load workers
+                        const workersResponse = await fetch(`${API_BASE}/workers`);
+                        if (workersResponse.ok) {
+                            const workers = await workersResponse.json();
+                            setAvailableWorkers(workers);
+                        }
+
+                        // Load clients
+                        const clientsResponse = await fetch(`${API_BASE}/clients`);
+                        if (clientsResponse.ok) {
+                            const clients = await clientsResponse.json();
+                            setAvailableClients(clients);
+                        }
+                    } catch (error) {
+                        console.error('Error loading workers and clients for filters:', error);
+                    }
+                };
+
+                loadWorkersAndClients();
+            }, []);
 
             // Close dropdown when clicking outside
             useEffect(() => {
@@ -727,7 +756,7 @@
                     // Priority filter
                     if (filters.priority !== 'all' && (card.priority || 'medium') !== filters.priority) {
                         return false;
-                    }                // Due date filter (using start_datetime)
+                    }                    // Due date filter (using start_datetime)
                     if (filters.dueDate !== 'all') {
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
@@ -748,8 +777,22 @@
                             startDate.setHours(0, 0, 0, 0);
                             const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
                             return startDate > today && startDate <= weekFromNow;
-                        } else if (filters.dueDate === 'no-date') {
-                            return !card.start_datetime;
+                        }
+                    }
+
+                    // Worker filter
+                    if (filters.worker !== 'all') {
+                        const workerId = parseInt(filters.worker);
+                        if (!card.worker_ids || !Array.isArray(card.worker_ids) || !card.worker_ids.includes(workerId)) {
+                            return false;
+                        }
+                    }
+
+                    // Client filter
+                    if (filters.client !== 'all') {
+                        const clientId = parseInt(filters.client);
+                        if (!card.client_id || card.client_id !== clientId) {
+                            return false;
                         }
                     }
 
@@ -769,12 +812,14 @@
                 setFilters({
                     search: '',
                     priority: 'all',
-                    dueDate: 'all'
+                    dueDate: 'all',
+                    worker: 'all',
+                    client: 'all'
                 });
             };
 
             const hasActiveFilters = () => {
-                return filters.search !== '' || filters.priority !== 'all' || filters.dueDate !== 'all';
+                return filters.search !== '' || filters.priority !== 'all' || filters.dueDate !== 'all' || filters.worker !== 'all' || filters.client !== 'all';
             };
 
             // Get total filtered cards count
@@ -883,6 +928,8 @@
                             hasActiveFilters={hasActiveFilters()}
                             filteredCount={getFilteredCardsCount()}
                             totalCount={board.lists.flatMap(list => list.cards).length}
+                            availableWorkers={availableWorkers}
+                            availableClients={availableClients}
                         />
                     )}
 
@@ -986,12 +1033,7 @@
                                                             {formatDateTimeForDisplay(card.start_datetime)}
                                                         </div>
                                                     )}
-                                                    {card.worker_ids && card.worker_ids.length > 0 && (
-                                                        <div className="card-workers">
-                                                            <i className="fas fa-user"></i>
-                                                            <span>{card.worker_ids.length} treballador{card.worker_ids.length > 1 ? 's' : ''}</span>
-                                                        </div>
-                                                    )}
+
                                                     <div className={`card-priority priority-${card.priority || 'medium'}`}>
                                                         <i className="fas fa-flag"></i>
                                                         {(card.priority || 'medium').charAt(0).toUpperCase() + (card.priority || 'medium').slice(1)}
@@ -1072,21 +1114,24 @@
             // Client-side filtering - instant results
             const filteredClients = allClients.filter(client => {
                 // Search filter - advanced matching
-                if (!searchTerm || !searchTerm.trim()) return true;
+                let searchMatch = true;
+                if (searchTerm && searchTerm.trim()) {
+                    const searchTermLower = searchTerm.toLowerCase().trim();
+                    const searchWords = searchTermLower.split(/\s+/); // Split by whitespace
 
-                const searchTermLower = searchTerm.toLowerCase().trim();
-                const searchWords = searchTermLower.split(/\s+/); // Split by whitespace
+                    const searchableText = [
+                        client.name || '',
+                        client.email || '',
+                        client.company || '',
+                        client.phone || '',
+                        client.address || ''
+                    ].join(' ').toLowerCase().trim();
 
-                const searchableText = [
-                    client.name || '',
-                    client.email || '',
-                    client.company || ''
-                ].join(' ').toLowerCase().trim();
-
-                // Check if all search words are found in the searchable text
-                const searchMatch = searchWords.every(word =>
-                    searchableText.includes(word)
-                );
+                    // Check if all search words are found in the searchable text
+                    searchMatch = searchWords.every(word =>
+                        searchableText.includes(word)
+                    );
+                }
 
                 // Status filter
                 const statusMatch = statusFilter === 'all' || client.status === statusFilter;
@@ -1171,7 +1216,7 @@
                     </div>
 
                     <div className="crud-filters">
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('input').focus()}>
                             <i className="fas fa-search"></i>
                             <input
                                 type="text"
@@ -1181,7 +1226,7 @@
                                 className="filter-input"
                             />
                         </div>
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('select').focus()}>
                             <i className="fas fa-filter"></i>
                             <select
                                 value={statusFilter}
@@ -1288,21 +1333,25 @@
             // Client-side filtering - instant results
             const filteredWorkers = allWorkers.filter(worker => {
                 // Search filter - advanced matching
-                if (!searchTerm || !searchTerm.trim()) return true;
+                let searchMatch = true;
+                if (searchTerm && searchTerm.trim()) {
+                    const searchTermLower = searchTerm.toLowerCase().trim();
+                    const searchWords = searchTermLower.split(/\s+/); // Split by whitespace
 
-                const searchTermLower = searchTerm.toLowerCase().trim();
-                const searchWords = searchTermLower.split(/\s+/); // Split by whitespace
+                    const searchableText = [
+                        worker.name || '',
+                        worker.email || '',
+                        worker.position || '',
+                        worker.department || '',
+                        worker.phone || '',
+                        worker.address || ''
+                    ].join(' ').toLowerCase().trim();
 
-                const searchableText = [
-                    worker.name || '',
-                    worker.email || '',
-                    worker.position || ''
-                ].join(' ').toLowerCase().trim();
-
-                // Check if all search words are found in the searchable text
-                const searchMatch = searchWords.every(word =>
-                    searchableText.includes(word)
-                );
+                    // Check if all search words are found in the searchable text
+                    searchMatch = searchWords.every(word =>
+                        searchableText.includes(word)
+                    );
+                }
 
                 // Department filter
                 const departmentMatch = departmentFilter === 'all' || worker.department === departmentFilter;
@@ -1402,7 +1451,7 @@
                     </div>
 
                     <div className="crud-filters">
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('input').focus()}>
                             <i className="fas fa-search"></i>
                             <input
                                 type="text"
@@ -1412,7 +1461,7 @@
                                 className="filter-input"
                             />
                         </div>
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('select').focus()}>
                             <i className="fas fa-building"></i>
                             <select
                                 value={departmentFilter}
@@ -1495,7 +1544,7 @@
             );
         }
 
-        function FilterBar({ filters, onFiltersChange, onClearFilters, hasActiveFilters, filteredCount, totalCount }) {
+        function FilterBar({ filters, onFiltersChange, onClearFilters, hasActiveFilters, filteredCount, totalCount, availableWorkers, availableClients }) {
             const updateFilter = (key, value) => {
                 onFiltersChange(prev => ({
                     ...prev,
@@ -1506,7 +1555,7 @@
             return (
                 <div className="filter-bar">
                     <div className="filter-group">
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('input').focus()}>
                             <i className="fas fa-search"></i>
                             <input
                                 type="text"
@@ -1517,7 +1566,7 @@
                             />
                         </div>
 
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('select').focus()}>
                             <i className="fas fa-flag"></i>
                             <select
                                 value={filters.priority}
@@ -1532,7 +1581,7 @@
                             </select>
                         </div>
 
-                        <div className="filter-item">
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('select').focus()}>
                             <i className="fas fa-calendar"></i>
                             <select
                                 value={filters.dueDate}
@@ -1543,7 +1592,38 @@
                                 <option value="overdue">Vençudes</option>
                                 <option value="today">Vencen Avui</option>
                                 <option value="upcoming">Vencen Aquesta Setmana</option>
-                                <option value="no-date">Sense Data Límit</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('select').focus()}>
+                            <i className="fas fa-users"></i>
+                            <select
+                                value={filters.worker}
+                                onChange={(e) => updateFilter('worker', e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">Tots els Treballadors</option>
+                                {availableWorkers.map(worker => (
+                                    <option key={worker.id} value={worker.id}>
+                                        {worker.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="filter-item" onClick={(e) => e.currentTarget.querySelector('select').focus()}>
+                            <i className="fas fa-user-tie"></i>
+                            <select
+                                value={filters.client}
+                                onChange={(e) => updateFilter('client', e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">Tots els Clients</option>
+                                {availableClients.map(client => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.name}{client.company ? ` (${client.company})` : ''}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
@@ -1631,14 +1711,62 @@
                             startDate.setHours(0, 0, 0, 0);
                             const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
                             return startDate > today && startDate <= weekFromNow;
-                        } else if (filters.dueDate === 'no-date') {
-                            return !card.start_datetime;
+                        }
+                    }
+
+                    // Worker filter
+                    if (filters.worker !== 'all') {
+                        const workerId = parseInt(filters.worker);
+                        if (!card.worker_ids || !Array.isArray(card.worker_ids) || !card.worker_ids.includes(workerId)) {
+                            return false;
+                        }
+                    }
+
+                    // Client filter
+                    if (filters.client !== 'all') {
+                        const clientId = parseInt(filters.client);
+                        if (!card.client_id || card.client_id !== clientId) {
+                            return false;
                         }
                     }
 
                     return true;
                 });
             };
+
+            // Auto-navigate to date when there's only one filtered result
+            useEffect(() => {
+                if (!board || !board.lists) return;
+
+                const filteredCards = getAllCards();
+
+                // Only auto-navigate if there's exactly one card and filters are active
+                const hasActiveFilters = filters.search !== '' || filters.priority !== 'all' || filters.dueDate !== 'all' || filters.worker !== 'all' || filters.client !== 'all';
+
+                if (hasActiveFilters && filteredCards.length === 1) {
+                    const card = filteredCards[0];
+                    if (card.start_datetime) {
+                        // Extract date from start_datetime
+                        const cardDateStr = card.start_datetime.includes('T')
+                            ? card.start_datetime.split('T')[0]
+                            : card.start_datetime.split(' ')[0];
+
+                        // Parse the date and navigate to it
+                        const [year, month, day] = cardDateStr.split('-').map(Number);
+                        const targetDate = new Date(year, month - 1, day);
+
+                        if (!isNaN(targetDate.getTime())) {
+                            setCurrentDate(targetDate);
+                            setHighlightedDate(targetDate);
+
+                            // Clear highlight after 3 seconds
+                            setTimeout(() => {
+                                setHighlightedDate(null);
+                            }, 3000);
+                        }
+                    }
+                }
+            }, [filters, board]);
 
             // Get cards for a specific date - now uses filtered cards
             const getCardsForDate = (date) => {
@@ -2124,7 +2252,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content wide">
                         <h3>{client ? 'Editar Client' : 'Afegir Client'}</h3>
                         <form onSubmit={handleSubmit} className="modal-form">
@@ -2248,7 +2376,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content wide">
                         <h3>{worker ? 'Editar Treballador' : 'Afegir Treballador'}</h3>
                         <form onSubmit={handleSubmit} className="modal-form">
@@ -2359,7 +2487,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content">
                         <h3>Afegir Nova Llista</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
@@ -2501,7 +2629,7 @@
             useEffect(() => {
                 const searchHeadEquip = async () => {
                     try {
-                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}&role=head_equip`);
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}`);
                         if (response.ok) {
                             const data = await response.json();
                             setHeadEquipList(data);
@@ -2549,7 +2677,8 @@
             };
 
             const handleOverlayClick = (e) => {
-                if (e.target === e.currentTarget) {
+                // Ensure we're clicking directly on the overlay and it's a real click event
+                if (e.target === e.currentTarget && e.isTrusted && e.clientX !== undefined && e.clientY !== undefined) {
                     onClose();
                 }
             };
@@ -2579,7 +2708,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content wide">
                         <h3>Afegir Nova Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
@@ -2877,7 +3006,7 @@
             useEffect(() => {
                 const searchHeadEquip = async () => {
                     try {
-                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}&role=head_equip`);
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}`);
                         if (response.ok) {
                             const data = await response.json();
                             setHeadEquipList(data);
@@ -2933,7 +3062,8 @@
             };
 
             const handleOverlayClick = (e) => {
-                if (e.target === e.currentTarget) {
+                // Ensure we're clicking directly on the overlay and it's a real click event
+                if (e.target === e.currentTarget && e.isTrusted && e.clientX !== undefined && e.clientY !== undefined) {
                     onClose();
                 }
             };
@@ -2963,7 +3093,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content wide">
                         <h3>Editar Targeta</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
@@ -3238,7 +3368,7 @@
             useEffect(() => {
                 const searchHeadEquip = async () => {
                     try {
-                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}&role=head_equip`);
+                        const response = await fetch(`${API_BASE}/workers/search?term=${encodeURIComponent(headEquipSearch)}`);
                         if (response.ok) {
                             const data = await response.json();
                             setHeadEquipList(data);
@@ -3286,14 +3416,14 @@
                         headEquipId || null,
                         startDatetime,
                         vehicleNumber.trim() || null,
-                        commands.trim() || null
-                    );
+                        commands.trim() || null);
                     onClose();
                 }
             };
 
             const handleOverlayClick = (e) => {
-                if (e.target === e.currentTarget) {
+                // Ensure we're clicking directly on the overlay and it's a real click event
+                if (e.target === e.currentTarget && e.isTrusted && e.clientX !== undefined && e.clientY !== undefined) {
                     onClose();
                 }
             };
@@ -3323,7 +3453,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content wide">
                         <h3>Afegir Tasca per {formatDateForDisplay(selectedDate)}</h3>
                         <form className="modal-form" onSubmit={handleSubmit}>
@@ -3526,7 +3656,7 @@
             };
 
             return (
-                <div className="modal-overlay" onClick={handleOverlayClick}>
+                <div className="modal-overlay">
                     <div className="modal-content confirmation-modal">
                         <div className="confirmation-header">
                             <i className={`fas ${isDestructive ? 'fa-exclamation-triangle' : 'fa-question-circle'} confirmation-icon ${isDestructive ? 'destructive' : 'info'}`}></i>
