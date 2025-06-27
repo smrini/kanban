@@ -65,6 +65,8 @@ const db = mysql.createConnection({
 	port: process.env.DB_PORT || 3306,
 	acquireTimeout: 60000,
 	timeout: 60000,
+	timezone: "local", // Use local timezone to prevent conversion
+	dateStrings: true, // Return dates as strings instead of Date objects
 });
 
 // Error handling middleware
@@ -175,7 +177,6 @@ function initializeDatabase() {
             description TEXT,
             position INT NOT NULL,
             priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
-            due_date DATE,
             client_id INT,
             worker_id INT,
             head_equip_id INT,
@@ -377,51 +378,9 @@ app.get("/api/boards/:id", (req, res) => {
 								(err, cards) => {
 									if (err) reject(err);
 									else {
-										// Fix: Format dates properly to avoid timezone issues
-										const formattedCards = cards.map(
-											(card) => {
-												let formattedDueDate = null;
-
-												if (card.due_date) {
-													if (
-														card.due_date instanceof
-														Date
-													) {
-														// Format date as YYYY-MM-DD using local timezone
-														const year =
-															card.due_date.getFullYear();
-														const month = String(
-															card.due_date.getMonth() +
-																1
-														).padStart(2, "0");
-														const day = String(
-															card.due_date.getDate()
-														).padStart(2, "0");
-														formattedDueDate = `${year}-${month}-${day}`;
-													} else if (
-														typeof card.due_date ===
-														"string"
-													) {
-														// If it's already a string, ensure it's in YYYY-MM-DD format
-														formattedDueDate =
-															card.due_date.split(
-																"T"
-															)[0];
-													} else {
-														formattedDueDate =
-															card.due_date;
-													}
-												}
-
-												return {
-													...card,
-													due_date: formattedDueDate,
-												};
-											}
-										);
 										resolve({
 											...list,
-											cards: formattedCards,
+											cards: cards,
 										});
 									}
 								}
@@ -495,13 +454,11 @@ app.post("/api/lists", (req, res) => {
 	);
 });
 
-// Create new card - Updated to handle priority and due_date and new fields
 app.post("/api/cards", (req, res) => {
 	const {
 		list_id,
 		title,
 		description,
-		due_date,
 		priority,
 		client_id,
 		worker_id,
@@ -515,7 +472,6 @@ app.post("/api/cards", (req, res) => {
 		list_id,
 		title,
 		description,
-		due_date,
 		priority,
 		client_id,
 		worker_id,
@@ -534,53 +490,43 @@ app.post("/api/cards", (req, res) => {
 				res.status(500).json({ error: err.message });
 				return;
 			}
-
 			const position = results[0].nextPos;
-
-			// Handle date properly - ensure it stays as the same date
-			let formattedDate = null;
-			if (due_date && due_date.trim() !== "") {
-				// Always ensure we're working with YYYY-MM-DD format only
-				if (typeof due_date === "string") {
-					// Extract just the date part, ignoring any time or timezone info
-					formattedDate = due_date.split("T")[0];
-
-					// Validate the date format
-					if (!formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-						console.error(
-							"Invalid date format received:",
-							due_date
-						);
-						res.status(400).json({ error: "Invalid date format" });
-						return;
-					}
-				} else {
-					formattedDate = due_date;
-				}
-			}
 
 			// Handle start_datetime
 			let formattedStartDatetime = null;
-			if (start_datetime && start_datetime.trim() !== "") {
-				formattedStartDatetime = start_datetime;
+			if (start_datetime !== null && start_datetime !== undefined) {
+				if (typeof start_datetime === "string") {
+					if (start_datetime.trim() !== "") {
+						// Simply convert T to space and ensure we have seconds
+						let dateTimeStr = start_datetime.trim();
+						if (dateTimeStr.includes("T")) {
+							dateTimeStr = dateTimeStr.replace("T", " ");
+						}
+						// Add seconds if not present
+						if (
+							dateTimeStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+						) {
+							dateTimeStr += ":00";
+						}
+						formattedStartDatetime = dateTimeStr;
+					}
+				} else {
+					formattedStartDatetime = start_datetime;
+				}
 			}
 
-			console.log("Original due_date:", due_date);
-			console.log("Formatted date for storage:", formattedDate);
 			console.log("Start datetime:", formattedStartDatetime);
-
 			db.query(
 				`INSERT INTO cards (
-					list_id, title, description, position, priority, due_date,
-					client_id, worker_id, head_equip_id, start_datetime, vehicle_number, commands
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				list_id, title, description, position, priority,
+				client_id, worker_id, head_equip_id, start_datetime, vehicle_number, commands
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				[
 					list_id,
 					title,
 					description || "",
 					position,
 					priority || "medium",
-					formattedDate,
 					client_id || null,
 					worker_id || null,
 					head_equip_id || null,
@@ -594,7 +540,6 @@ app.post("/api/cards", (req, res) => {
 						res.status(500).json({ error: err.message });
 						return;
 					}
-
 					const responseData = {
 						id: result.insertId,
 						list_id,
@@ -602,7 +547,6 @@ app.post("/api/cards", (req, res) => {
 						description: description || "",
 						position,
 						priority: priority || "medium",
-						due_date: formattedDate,
 						client_id: client_id || null,
 						worker_id: worker_id || null,
 						head_equip_id: head_equip_id || null,
@@ -798,10 +742,6 @@ app.put("/api/cards/:id", (req, res) => {
 				updates.priority !== undefined
 					? updates.priority
 					: currentCard.priority,
-			due_date:
-				updates.due_date !== undefined
-					? updates.due_date
-					: currentCard.due_date,
 			client_id:
 				updates.client_id !== undefined
 					? updates.client_id
@@ -828,44 +768,35 @@ app.put("/api/cards/:id", (req, res) => {
 					: currentCard.commands,
 		};
 
-		// Handle date properly - ensure it stays as the same date
-		let formattedDate = null;
-		if (updatedData.due_date && updatedData.due_date.trim() !== "") {
-			// Always ensure we're working with YYYY-MM-DD format only
-			if (typeof updatedData.due_date === "string") {
-				// Extract just the date part, ignoring any time or timezone info
-				formattedDate = updatedData.due_date.split("T")[0];
-
-				// Validate the date format
-				if (!formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-					console.error(
-						"Invalid date format received:",
-						updatedData.due_date
-					);
-					res.status(400).json({ error: "Invalid date format" });
-					return;
-				}
-			} else {
-				formattedDate = updatedData.due_date;
-			}
-		}
-
 		// Handle start_datetime
 		let formattedStartDatetime = null;
 		if (
-			updatedData.start_datetime &&
-			updatedData.start_datetime.trim() !== ""
+			updatedData.start_datetime !== null &&
+			updatedData.start_datetime !== undefined
 		) {
-			formattedStartDatetime = updatedData.start_datetime;
+			if (typeof updatedData.start_datetime === "string") {
+				if (updatedData.start_datetime.trim() !== "") {
+					// Simply convert T to space and ensure we have seconds
+					let dateTimeStr = updatedData.start_datetime.trim();
+					if (dateTimeStr.includes("T")) {
+						dateTimeStr = dateTimeStr.replace("T", " ");
+					}
+					// Add seconds if not present
+					if (dateTimeStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)) {
+						dateTimeStr += ":00";
+					}
+					formattedStartDatetime = dateTimeStr;
+				}
+			} else {
+				formattedStartDatetime = updatedData.start_datetime;
+			}
 		}
 
-		console.log("Original due_date:", updatedData.due_date);
-		console.log("Formatted date for storage:", formattedDate);
 		console.log("Start datetime:", formattedStartDatetime);
 
 		db.query(
 			`UPDATE cards SET 
-				title = ?, description = ?, priority = ?, due_date = ?,
+				title = ?, description = ?, priority = ?,
 				client_id = ?, worker_id = ?, head_equip_id = ?, 
 				start_datetime = ?, vehicle_number = ?, commands = ?
 			WHERE id = ?`,
@@ -873,7 +804,6 @@ app.put("/api/cards/:id", (req, res) => {
 				updatedData.title,
 				updatedData.description || "",
 				updatedData.priority || "medium",
-				formattedDate,
 				updatedData.client_id || null,
 				updatedData.worker_id || null,
 				updatedData.head_equip_id || null,
@@ -888,14 +818,9 @@ app.put("/api/cards/:id", (req, res) => {
 					res.status(500).json({ error: err.message });
 					return;
 				}
-
-				console.log(
-					"Card updated successfully with date:",
-					formattedDate
-				);
+				console.log("Card updated successfully");
 				res.json({
 					success: true,
-					due_date: formattedDate, // Return the formatted date
 				});
 			}
 		);
@@ -1446,26 +1371,32 @@ app.get("/api/debug/workers", (req, res) => {
 	});
 });
 
-// Debug endpoint to see all clients 
+// Debug endpoint to see all clients
 app.get("/api/debug/all-clients", (req, res) => {
-	db.query("SELECT id, name, company FROM clients ORDER BY name", (err, results) => {
-		if (err) {
-			res.status(500).json({ error: err.message });
-			return;
+	db.query(
+		"SELECT id, name, company FROM clients ORDER BY name",
+		(err, results) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			res.json(results);
 		}
-		res.json(results);
-	});
+	);
 });
 
 // Debug endpoint to see all workers
 app.get("/api/debug/all-workers", (req, res) => {
-	db.query("SELECT id, name, position, department FROM workers ORDER BY name", (err, results) => {
-		if (err) {
-			res.status(500).json({ error: err.message });
-			return;
+	db.query(
+		"SELECT id, name, position, department FROM workers ORDER BY name",
+		(err, results) => {
+			if (err) {
+				res.status(500).json({ error: err.message });
+				return;
+			}
+			res.json(results);
 		}
-		res.json(results);
-	});
+	);
 });
 
 // Start server

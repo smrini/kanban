@@ -99,6 +99,68 @@
             }
         };
 
+        const formatDateTimeForInput = (dateTimeString) => {
+            if (!dateTimeString) return '';
+
+            try {
+                // If it's already in the correct format for datetime-local (YYYY-MM-DDTHH:mm)
+                if (typeof dateTimeString === 'string' && dateTimeString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+                    return dateTimeString; // Already in correct format
+                }
+
+                // If it's an ISO string (2025-06-28T18:00:00.000Z), extract date and time
+                if (typeof dateTimeString === 'string' && dateTimeString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                    // Extract just the date and time part, ignore milliseconds and timezone
+                    const [datePart, timeWithTz] = dateTimeString.split('T');
+                    const timePart = timeWithTz.split('.')[0]; // Remove milliseconds and timezone
+                    return `${datePart}T${timePart.substring(0, 5)}`; // Keep only HH:mm
+                }
+
+                // If it's a MySQL datetime string (YYYY-MM-DD HH:mm:ss), just convert format
+                if (typeof dateTimeString === 'string' && dateTimeString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)) {
+                    return dateTimeString.replace(' ', 'T').substring(0, 16);
+                }
+
+                return '';
+            } catch (error) {
+                console.error('Error formatting datetime:', error);
+                return '';
+            }
+        };
+
+        const formatDateTimeForDisplay = (dateTimeString) => {
+            if (!dateTimeString) return '';
+
+            try {
+                // If it's a MySQL datetime string (YYYY-MM-DD HH:mm:ss), just format for display
+                if (typeof dateTimeString === 'string' && dateTimeString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)) {
+                    const [datePart, timePart] = dateTimeString.split(' ');
+                    const [year, month, day] = datePart.split('-');
+                    const [hours, minutes] = timePart.split(':');
+
+                    // Format as "DD/MM/YYYY HH:mm"
+                    return `${day}/${month}/${year} ${hours}:${minutes}`;
+                }
+
+                // If it's an ISO string (2025-06-28T18:00:00.000Z), convert to local time display
+                if (typeof dateTimeString === 'string' && dateTimeString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                    // Extract just the date and time part, ignore timezone info
+                    const [datePart, timeWithTz] = dateTimeString.split('T');
+                    const timePart = timeWithTz.split('.')[0]; // Remove milliseconds and timezone
+                    const [year, month, day] = datePart.split('-');
+                    const [hours, minutes] = timePart.split(':');
+
+                    // Format as "DD/MM/YYYY HH:mm"
+                    return `${day}/${month}/${year} ${hours}:${minutes}`;
+                }
+
+                return dateTimeString;
+            } catch (error) {
+                console.error('Error displaying datetime:', error);
+                return dateTimeString;
+            }
+        };
+
         function KanbanBoard() {
             const [board, setBoard] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -286,9 +348,7 @@
                     console.log('Adding card with all fields:', {
                         listId, title, description, dueDate, priority,
                         clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands
-                    });
-
-                    const response = await fetch(`${API_BASE}/cards`, {
+                    }); const response = await fetch(`${API_BASE}/cards`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -297,7 +357,6 @@
                             list_id: listId,
                             title,
                             description,
-                            due_date: dueDate || null,
                             priority,
                             client_id: clientId,
                             worker_id: workerId,
@@ -317,8 +376,7 @@
 
                     const cardWithAllFields = {
                         ...newCard,
-                        priority: newCard.priority || priority,
-                        due_date: newCard.due_date || (dueDate || null)
+                        priority: newCard.priority || priority
                     };
 
                     setBoard(prev => ({
@@ -337,10 +395,12 @@
                     console.error('Error adding card:', err);
                     setError('Failed to add card');
                 }
-            };
-
-            const updateCard = async (cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) => {
+            }; const updateCard = async (cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands) => {
                 try {
+                    console.log('Updating card with data:', {
+                        cardId, title, description, priority, clientId, workerId, headEquipId, startDatetime, vehicleNumber, commands
+                    });
+
                     const response = await fetch(`${API_BASE}/cards/${cardId}`, {
                         method: 'PUT',
                         headers: {
@@ -359,13 +419,21 @@
                         })
                     });
 
+                    console.log('Update response status:', response.status);
+                    console.log('Update response ok:', response.ok);
+
                     if (!response.ok) {
-                        throw new Error('Failed to update card');
+                        const errorText = await response.text();
+                        console.error('Update response error:', errorText);
+                        throw new Error(`Failed to update card: ${response.status}`);
                     }
 
+                    const result = await response.json();
+                    console.log('Update response data:', result);
+
                     // Refresh the board to get updated card with client/worker names
-                    if (boardId) {
-                        fetchBoardData(boardId);
+                    if (board && board.id) {
+                        fetchBoard();
                     }
                     setEditingCard(null);
                 } catch (err) {
@@ -671,28 +739,29 @@
                     // Priority filter
                     if (filters.priority !== 'all' && (card.priority || 'medium') !== filters.priority) {
                         return false;
-                    }
-
-                    // Due date filter
+                    }                // Due date filter (using start_datetime)
                     if (filters.dueDate !== 'all') {
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
 
                         if (filters.dueDate === 'overdue') {
-                            if (!card.due_date) return false;
-                            const dueDate = new Date(card.due_date + 'T00:00:00');
-                            return dueDate < today;
+                            if (!card.start_datetime) return false;
+                            const startDate = new Date(card.start_datetime);
+                            startDate.setHours(0, 0, 0, 0);
+                            return startDate < today;
                         } else if (filters.dueDate === 'today') {
-                            if (!card.due_date) return false;
-                            const dueDate = new Date(card.due_date + 'T00:00:00');
-                            return dueDate.getTime() === today.getTime();
+                            if (!card.start_datetime) return false;
+                            const startDate = new Date(card.start_datetime);
+                            startDate.setHours(0, 0, 0, 0);
+                            return startDate.getTime() === today.getTime();
                         } else if (filters.dueDate === 'upcoming') {
-                            if (!card.due_date) return false;
-                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            if (!card.start_datetime) return false;
+                            const startDate = new Date(card.start_datetime);
+                            startDate.setHours(0, 0, 0, 0);
                             const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-                            return dueDate > today && dueDate <= weekFromNow;
+                            return startDate > today && startDate <= weekFromNow;
                         } else if (filters.dueDate === 'no-date') {
-                            return !card.due_date;
+                            return !card.start_datetime;
                         }
                     }
 
@@ -913,25 +982,22 @@
                                                 <div className="card-title">{card.title}</div>
                                                 {card.description && (
                                                     <div className="card-description">{card.description}</div>
-                                                )}
-                                                <div className="card-meta">
-                                                    {card.due_date && (
+                                                )}                                            <div className="card-meta">
+                                                    {card.start_datetime && (
                                                         <div className={`card-due-date ${(() => {
                                                             const today = new Date();
                                                             today.setHours(0, 0, 0, 0);
 
-                                                            // Parse the card date carefully
-                                                            const [year, month, day] = card.due_date.split('-').map(num => parseInt(num, 10));
-                                                            const cardDate = new Date(year, month - 1, day);
-                                                            cardDate.setHours(0, 0, 0, 0);
+                                                            // Parse the start_datetime
+                                                            const startDate = new Date(card.start_datetime);
+                                                            startDate.setHours(0, 0, 0, 0);
 
-                                                            return cardDate < today ? 'overdue' : '';
+                                                            return startDate < today ? 'overdue' : '';
                                                         })()}`}>
                                                             <i className="fas fa-calendar"></i>
-                                                            {formatDateForDisplay(card.due_date)}
+                                                            {formatDateTimeForDisplay(card.start_datetime)}
                                                         </div>
-                                                    )}
-                                                    <div className={`card-priority priority-${card.priority || 'medium'}`}>
+                                                    )}                                            <div className={`card-priority priority-${card.priority || 'medium'}`}>
                                                         <i className="fas fa-flag"></i>
                                                         {(card.priority || 'medium').charAt(0).toUpperCase() + (card.priority || 'medium').slice(1)}
                                                     </div>
@@ -1545,28 +1611,29 @@
                     // Priority filter
                     if (filters.priority !== 'all' && (card.priority || 'medium') !== filters.priority) {
                         return false;
-                    }
-
-                    // Due date filter for calendar view
+                    }                // Due date filter for calendar view (using start_datetime)
                     if (filters.dueDate !== 'all') {
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
 
                         if (filters.dueDate === 'overdue') {
-                            if (!card.due_date) return false;
-                            const dueDate = new Date(card.due_date + 'T00:00:00');
-                            return dueDate < today;
+                            if (!card.start_datetime) return false;
+                            const startDate = new Date(card.start_datetime);
+                            startDate.setHours(0, 0, 0, 0);
+                            return startDate < today;
                         } else if (filters.dueDate === 'today') {
-                            if (!card.due_date) return false;
-                            const dueDate = new Date(card.due_date + 'T00:00:00');
-                            return dueDate.getTime() === today.getTime();
+                            if (!card.start_datetime) return false;
+                            const startDate = new Date(card.start_datetime);
+                            startDate.setHours(0, 0, 0, 0);
+                            return startDate.getTime() === today.getTime();
                         } else if (filters.dueDate === 'upcoming') {
-                            if (!card.due_date) return false;
-                            const dueDate = new Date(card.due_date + 'T00:00:00');
+                            if (!card.start_datetime) return false;
+                            const startDate = new Date(card.start_datetime);
+                            startDate.setHours(0, 0, 0, 0);
                             const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-                            return dueDate > today && dueDate <= weekFromNow;
+                            return startDate > today && startDate <= weekFromNow;
                         } else if (filters.dueDate === 'no-date') {
-                            return !card.due_date;
+                            return !card.start_datetime;
                         }
                     }
 
@@ -1580,14 +1647,12 @@
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
-                const dateStr = `${year}-${month}-${day}`;
-
-                return getAllCards().filter(card => {
-                    if (!card.due_date) return false;
-                    // Direct string comparison - extract just the date part
-                    const cardDateStr = card.due_date.includes('T')
-                        ? card.due_date.split('T')[0]
-                        : card.due_date;
+                const dateStr = `${year}-${month}-${day}`; return getAllCards().filter(card => {
+                    if (!card.start_datetime) return false;
+                    // Extract just the date part from start_datetime
+                    const cardDateStr = card.start_datetime.includes('T')
+                        ? card.start_datetime.split('T')[0]
+                        : card.start_datetime.split(' ')[0]; // Handle 'YYYY-MM-DD HH:mm:ss' format too
                     return cardDateStr === dateStr;
                 });
             };
@@ -1625,17 +1690,21 @@
                     newDate.setMonth(prev.getMonth() + direction);
                     return newDate;
                 });
-            };
-
-            const updateCardDueDate = async (cardId, newDueDate) => {
+            }; const updateCardStartDateTime = async (cardId, newDate) => {
                 try {
+                    // Format the date as datetime for start_datetime
+                    const year = newDate.getFullYear();
+                    const month = String(newDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(newDate.getDate()).padStart(2, '0');
+                    const newStartDateTime = `${year}-${month}-${day}T09:00:00`; // Default to 9 AM
+
                     const response = await fetch(`${API_BASE}/cards/${cardId}`, {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            due_date: newDueDate
+                            start_datetime: newStartDateTime
                         })
                     });
 
@@ -1645,10 +1714,10 @@
 
                     // Update the board state using the passed function
                     if (onUpdateCard) {
-                        onUpdateCard(cardId, { due_date: newDueDate });
+                        onUpdateCard(cardId, { start_datetime: newStartDateTime });
                     }
                 } catch (error) {
-                    console.error('Error updating card date:', error);
+                    console.error('Error updating card start datetime:', error);
                 }
             };
 
@@ -1700,20 +1769,22 @@
                 e.preventDefault();
                 e.stopPropagation();
 
-                if (!draggedCard) return;
-
-                // Use the same date formatting logic as everywhere else
+                if (!draggedCard) return;            // Use the same date formatting logic as everywhere else
                 const year = targetDate.getFullYear();
                 const month = String(targetDate.getMonth() + 1).padStart(2, '0');
                 const day = String(targetDate.getDate()).padStart(2, '0');
-                const newDueDateStr = `${year}-${month}-${day}`;
+                const newDateStr = `${year}-${month}-${day}`;
 
-                console.log('Calendar drag drop - new date:', newDueDateStr); // Debug log
+                console.log('Calendar drag drop - new date:', newDateStr); // Debug log
 
-                // Check if the date is actually different
-                const currentDueDateStr = draggedCard.due_date;
-                if (currentDueDateStr !== newDueDateStr) {
-                    await updateCardDueDate(draggedCard.id, newDueDateStr);
+                // Check if the date is actually different from start_datetime
+                let currentDateStr = null;
+                if (draggedCard.start_datetime) {
+                    currentDateStr = draggedCard.start_datetime.split('T')[0];
+                }
+
+                if (currentDateStr !== newDateStr) {
+                    await updateCardStartDateTime(draggedCard.id, targetDate);
                 }
 
                 setDraggedCard(null);
@@ -2631,7 +2702,7 @@
             const [headEquipId, setHeadEquipId] = useState(card.head_equip_id || '');
             const [headEquipSearch, setHeadEquipSearch] = useState(card.head_equip_name ? `${card.head_equip_name}${card.head_equip_position ? ` - ${card.head_equip_position}` : ''}` : '');
             const [headEquipList, setHeadEquipList] = useState([]);
-            const [startDatetime, setStartDatetime] = useState(card.start_datetime || '');
+            const [startDatetime, setStartDatetime] = useState(formatDateTimeForInput(card.start_datetime) || '');
             const [vehicleNumber, setVehicleNumber] = useState(card.vehicle_number || '');
             const [commands, setCommands] = useState(card.commands || '');
 
