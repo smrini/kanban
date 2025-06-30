@@ -2,7 +2,7 @@
 require("dotenv").config();
 
 const express = require("express");
-const mysql = require("mysql");
+const mysql = require("mysql2");
 const cors = require("cors");
 const path = require("path");
 
@@ -58,15 +58,14 @@ if (NODE_ENV === "production") {
 
 // Initialize MySQL database connection with environment variables
 const db = mysql.createConnection({
-	host: process.env.DB_HOST || "localhost",
-	user: process.env.DB_USER || "root",
-	password: process.env.DB_PASSWORD || "",
-	database: process.env.DB_NAME || "kanban_db",
-	port: process.env.DB_PORT || 3306,
-	acquireTimeout: 60000,
-	timeout: 60000,
-	timezone: "local", // Use local timezone to prevent conversion
-	dateStrings: true, // Return dates as strings instead of Date objects
+    host: process.env.DB_HOST || "localhost",
+    user: process.env.DB_USER || "root",
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME || "kanban_db",
+    port: process.env.DB_PORT || 3306,
+    timezone: "local", // Use local timezone to prevent conversion
+    dateStrings: true, // Return dates as strings instead of Date objects
+    connectTimeout: 60000, // Connection timeout in milliseconds
 });
 
 // Error handling middleware
